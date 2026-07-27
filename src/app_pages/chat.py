@@ -3,6 +3,7 @@ from pathlib import Path
 
 import streamlit as st
 from agents.orchestrator import run_turn, submit_feedback
+from ui_shared import render_header, render_sidebar_footer
 
 
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
@@ -355,9 +356,6 @@ if "student_name" not in st.session_state:
 
 # --- Sidebar ---
 with st.sidebar:
-    st.markdown("## :material/explore: PathFinder AI")
-    st.caption("Career discovery and college pathway guidance.")
-
     st.text_input(
         "Your name",
         key="student_name",
@@ -372,7 +370,11 @@ with st.sidebar:
         width="stretch",
     )
 
+    render_sidebar_footer()
+
 # --- Main page ---
+render_header()
+
 if not st.session_state.messages:
     st.info(
         "Tell me what you're into — subjects, hobbies, anything — and I'll help you explore "
