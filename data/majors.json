@@ -1,0 +1,398 @@
+[
+  {
+    "id": "major_computer_science",
+    "name": "Computer Science",
+    "description": "The study of computation, algorithms, data structures, software engineering, and the mathematical foundations of computing.",
+    "related_careers": ["Software Engineer", "AI/Machine Learning Engineer", "Data Scientist", "Cybersecurity Analyst", "Game Developer", "UX/UI Designer"],
+    "recommended_subjects": ["Calculus", "Statistics", "Physics", "Discrete Math", "AP Computer Science"],
+    "skills_built": ["programming", "algorithmic thinking", "system design", "mathematical reasoning", "software testing"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Engineering"]
+  },
+  {
+    "id": "major_data_science",
+    "name": "Data Science",
+    "description": "Combines statistics, computer science, and domain knowledge to extract insights from data — covering machine learning, visualization, and data engineering.",
+    "related_careers": ["Data Scientist", "AI/Machine Learning Engineer", "Business Intelligence Developer", "Sports Analyst", "Financial Analyst"],
+    "recommended_subjects": ["Statistics", "Calculus", "AP Computer Science", "Economics", "Psychology"],
+    "skills_built": ["statistical modeling", "Python/R programming", "data wrangling", "visualization", "machine learning"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_cybersecurity",
+    "name": "Cybersecurity",
+    "description": "Study of protecting computer systems, networks, and data from attack — covering cryptography, network defense, digital forensics, and security operations.",
+    "related_careers": ["Cybersecurity Analyst", "Penetration Tester", "Digital Forensics Analyst", "Cloud Security Engineer", "Intelligence Analyst"],
+    "recommended_subjects": ["AP Computer Science", "Networking", "Mathematics", "Physics"],
+    "skills_built": ["network security", "ethical hacking", "incident response", "risk assessment", "forensic analysis"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Applied Science"]
+  },
+  {
+    "id": "major_information_technology",
+    "name": "Information Technology",
+    "description": "Applied computing focused on deploying, managing, and securing technology systems in business and organizational contexts.",
+    "related_careers": ["IT Support Specialist", "Database Administrator", "Network Administrator", "Cybersecurity Analyst", "Systems Analyst"],
+    "recommended_subjects": ["AP Computer Science", "Business", "Mathematics"],
+    "skills_built": ["systems administration", "networking", "database management", "IT project management", "user support"],
+    "typical_degree_types": ["Associate of Applied Science", "Bachelor of Science", "Bachelor of Applied Science"]
+  },
+  {
+    "id": "major_gis",
+    "name": "Geographic Information Systems (GIS)",
+    "description": "Study of spatial data — mapping, remote sensing, geographic analysis, and geospatial technology applications in environment, planning, and defense.",
+    "related_careers": ["Geospatial Engineer", "Environmental Scientist", "Urban Planner", "Intelligence Analyst", "Sustainability Manager"],
+    "recommended_subjects": ["Geography", "Statistics", "AP Computer Science", "Environmental Science", "Calculus"],
+    "skills_built": ["spatial analysis", "GIS software (ArcGIS, QGIS)", "remote sensing", "cartography", "Python for geospatial"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_game_design",
+    "name": "Game Design",
+    "description": "Interdisciplinary major covering game mechanics, narrative design, level design, user experience, and game development across digital and tabletop formats.",
+    "related_careers": ["Game Designer", "Game Developer", "Narrative Designer", "UX/UI Designer", "Esports Manager"],
+    "recommended_subjects": ["AP Computer Science", "Art", "Psychology", "Creative Writing", "Mathematics"],
+    "skills_built": ["systems design", "level design", "game prototyping", "playtesting", "Unity/Unreal Engine"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_graphic_design",
+    "name": "Graphic Design",
+    "description": "Visual communication through typography, layout, branding, and digital media — preparing students for careers across advertising, media, and industry.",
+    "related_careers": ["Graphic Designer", "UX/UI Designer", "Art Director", "Motion Graphics Designer", "Brand Strategist"],
+    "recommended_subjects": ["Art", "Photography", "AP Studio Art", "Computer Applications", "Marketing"],
+    "skills_built": ["Adobe Creative Suite", "typography", "color theory", "branding", "layout design"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Arts", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_animation",
+    "name": "Animation",
+    "description": "Study of 2D and 3D animation for film, gaming, and digital media — covering character animation, visual effects, and motion graphics.",
+    "related_careers": ["Animator", "VFX Artist", "Motion Graphics Designer", "Game Developer", "Film Director"],
+    "recommended_subjects": ["Art", "AP Studio Art", "AP Computer Science", "Physics (for motion)", "Photography"],
+    "skills_built": ["3D modeling (Maya, Blender)", "rigging and skinning", "keyframe animation", "storyboarding", "VFX compositing"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_film_production",
+    "name": "Film Production",
+    "description": "Study of storytelling through film — covering directing, cinematography, editing, screenwriting, and production management.",
+    "related_careers": ["Film Director", "Video Editor", "Screenwriter", "Cinematographer", "Podcast Producer", "Content Creator"],
+    "recommended_subjects": ["Creative Writing", "Photography", "Art", "Theater", "English"],
+    "skills_built": ["directing", "screenwriting", "video editing (Premiere, DaVinci Resolve)", "cinematography", "production management"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_music",
+    "name": "Music",
+    "description": "Study of music performance, theory, history, and composition — with concentrations available in performance, composition, and education.",
+    "related_careers": ["Music Teacher", "Performer", "Composer", "Music Therapist", "Artist Manager"],
+    "recommended_subjects": ["Music Theory", "Band/Orchestra/Choir", "Piano", "AP Music Theory"],
+    "skills_built": ["music theory", "ear training", "ensemble performance", "music history", "composition"],
+    "typical_degree_types": ["Bachelor of Music", "Bachelor of Arts", "Bachelor of Fine Arts"]
+  },
+  {
+    "id": "major_music_production",
+    "name": "Music Production / Audio Engineering",
+    "description": "Applied study of recording, mixing, mastering, and producing music and audio using professional studio tools and techniques.",
+    "related_careers": ["Music Producer", "Sound Engineer", "Game Audio Designer", "Podcast Producer", "Film Composer"],
+    "recommended_subjects": ["Music Theory", "AP Music Theory", "AP Computer Science", "Physics"],
+    "skills_built": ["DAW proficiency (Ableton, Logic Pro)", "mixing and mastering", "sound design", "signal flow", "music business"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Fine Arts", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_music_therapy",
+    "name": "Music Therapy",
+    "description": "Clinical use of music to address physical, emotional, cognitive, and social needs — requires both musical proficiency and clinical training.",
+    "related_careers": ["Music Therapist", "Recreational Therapist", "School Counselor", "Art Therapist", "Special Education Teacher"],
+    "recommended_subjects": ["Music Theory", "Psychology", "Biology", "AP Music Theory", "Band/Orchestra/Choir"],
+    "skills_built": ["clinical assessment", "therapeutic music techniques", "improvisation", "treatment planning", "patient communication"],
+    "typical_degree_types": ["Bachelor of Music", "Bachelor of Science"]
+  },
+  {
+    "id": "major_fashion_design",
+    "name": "Fashion Design",
+    "description": "Artistic and technical study of clothing design — covering pattern making, textile science, fashion illustration, and the fashion industry.",
+    "related_careers": ["Fashion Designer", "Costume Designer", "Textile Designer", "Fashion Buyer", "Personal Stylist"],
+    "recommended_subjects": ["Art", "AP Studio Art", "Home Economics/Sewing", "Marketing"],
+    "skills_built": ["pattern drafting", "fabric selection", "fashion illustration", "trend research", "garment construction"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_theatre",
+    "name": "Theatre Arts",
+    "description": "Study of acting, directing, stagecraft, costume design, and theater history — developing performance and production skills.",
+    "related_careers": ["Actor", "Theater Director", "Costume Designer", "Drama Teacher", "Casting Director", "Set Designer"],
+    "recommended_subjects": ["Theater", "English", "Creative Writing", "Dance", "Art"],
+    "skills_built": ["performance technique", "script analysis", "stagecraft", "voice and movement", "collaboration"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_sports_management",
+    "name": "Sports Management",
+    "description": "Business and operations side of sports — covering marketing, finance, law, event management, and facility operations in athletic contexts.",
+    "related_careers": ["Esports Manager", "Sports Analyst", "Athletic Director", "Sports Agent", "Event Planner"],
+    "recommended_subjects": ["Business", "Economics", "Marketing", "Statistics", "Physical Education"],
+    "skills_built": ["sports marketing", "event operations", "athlete relations", "financial management", "sports law basics"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Business Administration"]
+  },
+  {
+    "id": "major_kinesiology",
+    "name": "Kinesiology / Exercise Science",
+    "description": "Scientific study of human movement — covering anatomy, physiology, biomechanics, and the application of exercise in health and performance.",
+    "related_careers": ["Athletic Trainer", "Physical Therapist", "Sports Coach", "Strength & Conditioning Coach", "Personal Trainer"],
+    "recommended_subjects": ["Biology", "Chemistry", "Physics", "Anatomy & Physiology", "Physical Education"],
+    "skills_built": ["exercise physiology", "anatomy", "fitness assessment", "biomechanics", "health counseling"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_nursing",
+    "name": "Nursing (BSN)",
+    "description": "Comprehensive clinical training in patient care — covering anatomy, pharmacology, disease management, and nursing practice across care settings.",
+    "related_careers": ["Registered Nurse", "Nurse Practitioner", "School Nurse", "Public Health Nurse", "Travel Nurse"],
+    "recommended_subjects": ["Biology", "Chemistry", "Anatomy & Physiology", "Psychology", "Statistics"],
+    "skills_built": ["clinical assessment", "medication administration", "patient education", "care coordination", "documentation"],
+    "typical_degree_types": ["Bachelor of Science in Nursing", "Associate of Science in Nursing (entry-level)"]
+  },
+  {
+    "id": "major_psychology",
+    "name": "Psychology",
+    "description": "Scientific study of human behavior and mental processes — covering cognition, development, social behavior, abnormal psychology, and research methods.",
+    "related_careers": ["Mental Health Counselor", "School Counselor", "UX Researcher", "Social Worker", "Human Resources Manager", "Market Research Analyst"],
+    "recommended_subjects": ["AP Psychology", "Statistics", "Biology", "Sociology", "English"],
+    "skills_built": ["research methods", "statistical analysis", "behavioral assessment", "empathetic communication", "critical thinking"],
+    "typical_degree_types": ["Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_social_work",
+    "name": "Social Work (BSW/MSW)",
+    "description": "Training in social services, case management, advocacy, and policy to support vulnerable individuals and communities.",
+    "related_careers": ["Social Worker", "School Counselor", "Nonprofit Director", "Child Welfare Caseworker", "Substance Abuse Counselor"],
+    "recommended_subjects": ["Sociology", "Psychology", "Statistics", "Government/Civics", "English"],
+    "skills_built": ["case management", "crisis intervention", "cultural competency", "advocacy", "resource navigation"],
+    "typical_degree_types": ["Bachelor of Social Work", "Master of Social Work (for clinical licensure)"]
+  },
+  {
+    "id": "major_education",
+    "name": "Education",
+    "description": "Preparation for teaching and educational leadership — covering curriculum design, learning theory, classroom management, and student development.",
+    "related_careers": ["K-12 Teacher", "School Counselor", "Educational Technology Designer", "School Principal", "Curriculum Designer"],
+    "recommended_subjects": ["English", "Psychology", "Sociology", "Mathematics", "Science"],
+    "skills_built": ["lesson planning", "differentiated instruction", "assessment design", "classroom management", "student development"],
+    "typical_degree_types": ["Bachelor of Science in Education", "Bachelor of Arts in Education"]
+  },
+  {
+    "id": "major_culinary_arts",
+    "name": "Culinary Arts",
+    "description": "Professional kitchen training in cooking techniques, menu development, food safety, and restaurant operations.",
+    "related_careers": ["Chef", "Pastry Chef", "Food Stylist", "Culinary Educator", "Restaurant Manager"],
+    "recommended_subjects": ["Home Economics", "Chemistry", "Business", "Art"],
+    "skills_built": ["classical cooking techniques", "menu development", "food safety (ServSafe)", "kitchen management", "pastry and baking"],
+    "typical_degree_types": ["Associate of Applied Science", "Certificate", "Bachelor of Science (culinary management)"]
+  },
+  {
+    "id": "major_hospitality_management",
+    "name": "Hospitality Management",
+    "description": "Operations and business management of hotels, restaurants, events, and tourism — covering service excellence, finance, and industry operations.",
+    "related_careers": ["Hotel Manager", "Event Planner", "Restaurant Manager", "Tourism Director", "Cruise Line Operations Manager"],
+    "recommended_subjects": ["Business", "Economics", "Marketing", "Foreign Language"],
+    "skills_built": ["revenue management", "guest relations", "food and beverage operations", "event coordination", "financial management"],
+    "typical_degree_types": ["Bachelor of Science", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_business_administration",
+    "name": "Business Administration",
+    "description": "Broad management training covering marketing, finance, operations, strategy, and organizational behavior — the most versatile business degree.",
+    "related_careers": ["Marketing Manager", "Financial Analyst", "Operations Manager", "Entrepreneur", "Business Analyst"],
+    "recommended_subjects": ["Economics", "Statistics", "Mathematics", "English", "Marketing (if available)"],
+    "skills_built": ["financial literacy", "strategic planning", "marketing fundamentals", "leadership", "business communication"],
+    "typical_degree_types": ["Bachelor of Business Administration", "Bachelor of Science"]
+  },
+  {
+    "id": "major_marketing",
+    "name": "Marketing",
+    "description": "Study of consumer behavior, brand strategy, digital marketing, advertising, and market research.",
+    "related_careers": ["Marketing Manager", "Brand Strategist", "Content Creator", "Social Media Manager", "Market Research Analyst"],
+    "recommended_subjects": ["Business", "Statistics", "Psychology", "English", "Art"],
+    "skills_built": ["consumer behavior analysis", "digital marketing (SEO, SEM, social)", "brand management", "campaign strategy", "market research"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Business Administration", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_finance",
+    "name": "Finance",
+    "description": "Study of investment, corporate finance, financial markets, risk management, and financial analysis.",
+    "related_careers": ["Financial Analyst", "Investment Banker", "Accountant", "Risk Manager", "Financial Planner"],
+    "recommended_subjects": ["Calculus", "Statistics", "Economics", "Accounting (if available)", "Business"],
+    "skills_built": ["financial modeling", "investment analysis", "risk assessment", "corporate finance", "Excel and data tools"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Business Administration"]
+  },
+  {
+    "id": "major_accounting",
+    "name": "Accounting",
+    "description": "Technical study of financial record-keeping, auditing, taxation, and compliance — the foundation for CPA licensure.",
+    "related_careers": ["Accountant/CPA", "Forensic Accountant", "Financial Analyst", "Tax Advisor", "Chief Financial Officer"],
+    "recommended_subjects": ["Mathematics", "Statistics", "Economics", "Business", "Computer Applications"],
+    "skills_built": ["GAAP accounting", "auditing", "tax preparation", "financial reporting", "accounting software"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Business Administration"]
+  },
+  {
+    "id": "major_political_science",
+    "name": "Political Science",
+    "description": "Study of government systems, public policy, international relations, political behavior, and law — strong preparation for law school and public service.",
+    "related_careers": ["Policy Analyst", "Lawyer", "Foreign Service Officer", "Journalist", "Campaign Manager", "Military Officer"],
+    "recommended_subjects": ["AP Government", "History", "Economics", "English", "Statistics"],
+    "skills_built": ["policy analysis", "research and writing", "critical argumentation", "understanding of governance", "international relations"],
+    "typical_degree_types": ["Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_criminal_justice",
+    "name": "Criminal Justice",
+    "description": "Study of the criminal justice system — law enforcement, courts, corrections, and criminology — preparing students for public safety and legal careers.",
+    "related_careers": ["Law Enforcement Officer", "Probation Officer", "Crime Analyst", "Social Worker", "Lawyer", "Social Worker"],
+    "recommended_subjects": ["Government/Civics", "Sociology", "Psychology", "Statistics"],
+    "skills_built": ["criminological theory", "legal processes", "ethical reasoning", "report writing", "community relations"],
+    "typical_degree_types": ["Associate of Science", "Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_environmental_science",
+    "name": "Environmental Science",
+    "description": "Interdisciplinary study of environmental systems — covering ecology, chemistry, earth science, and policy, with field and laboratory components.",
+    "related_careers": ["Environmental Scientist", "Conservation Scientist", "Wildlife Biologist", "Climate Scientist", "Environmental Engineer"],
+    "recommended_subjects": ["AP Environmental Science", "Biology", "Chemistry", "Earth Science", "Statistics"],
+    "skills_built": ["environmental sampling", "ecological assessment", "GIS", "environmental regulation", "data analysis"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_agriculture_science",
+    "name": "Agriculture Science",
+    "description": "Applied science of crop production, soil management, animal agriculture, and agricultural business — with strong hands-on components.",
+    "related_careers": ["Agronomist", "Agricultural Engineer", "Farm Manager", "Soil Scientist", "Cooperative Extension Agent"],
+    "recommended_subjects": ["Biology", "Chemistry", "Earth Science", "Mathematics", "FFA (if available)"],
+    "skills_built": ["soil and crop science", "agricultural technology", "animal husbandry", "farm management", "agricultural business"],
+    "typical_degree_types": ["Bachelor of Science", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_mechanical_engineering",
+    "name": "Mechanical Engineering",
+    "description": "Design, analysis, and manufacturing of mechanical systems — covering thermodynamics, materials science, fluid mechanics, and product design.",
+    "related_careers": ["Mechanical Engineer", "Robotics Engineer", "Automotive Engineer", "HVAC Engineer", "Manufacturing Engineer"],
+    "recommended_subjects": ["AP Physics", "AP Calculus", "AP Chemistry", "Pre-Calculus", "Computer Science"],
+    "skills_built": ["CAD design (SolidWorks, AutoCAD)", "thermodynamics", "materials science", "manufacturing processes", "engineering analysis"],
+    "typical_degree_types": ["Bachelor of Science in Engineering", "Bachelor of Engineering"]
+  },
+  {
+    "id": "major_electrical_engineering",
+    "name": "Electrical Engineering",
+    "description": "Study of electrical systems, electronics, power, and signals — foundational to robotics, computing, energy, and communications technology.",
+    "related_careers": ["Electrical Engineer", "Robotics Engineer", "AI Engineer", "Power Systems Engineer", "Telecommunications Engineer"],
+    "recommended_subjects": ["AP Physics (E&M)", "AP Calculus", "AP Computer Science", "Pre-Calculus"],
+    "skills_built": ["circuit design", "signal processing", "embedded systems", "power systems", "programming (C, Python, MATLAB)"],
+    "typical_degree_types": ["Bachelor of Science in Engineering", "Bachelor of Engineering"]
+  },
+  {
+    "id": "major_civil_engineering",
+    "name": "Civil Engineering",
+    "description": "Design and construction of infrastructure — roads, bridges, water systems, and buildings — combining structural, environmental, and transportation engineering.",
+    "related_careers": ["Civil Engineer", "Structural Engineer", "Urban Planner", "Environmental Engineer", "Construction Manager"],
+    "recommended_subjects": ["AP Physics", "AP Calculus", "AP Chemistry", "Statistics", "Geography"],
+    "skills_built": ["structural analysis", "AutoCAD and BIM", "materials testing", "environmental impact assessment", "project management"],
+    "typical_degree_types": ["Bachelor of Science in Engineering", "Bachelor of Engineering"]
+  },
+  {
+    "id": "major_nursing_adn",
+    "name": "Nursing (ADN - Associate Degree)",
+    "description": "Accelerated 2-year entry pathway into registered nursing — covering clinical fundamentals and hands-on patient care. Many ADN nurses later pursue RN-to-BSN completion.",
+    "related_careers": ["Registered Nurse", "Home Health Aide", "School Nurse", "Travel Nurse"],
+    "recommended_subjects": ["Biology", "Chemistry", "Anatomy & Physiology", "Psychology"],
+    "skills_built": ["clinical nursing skills", "medication administration", "patient communication", "documentation", "emergency response"],
+    "typical_degree_types": ["Associate of Science in Nursing"]
+  },
+  {
+    "id": "major_welding_technology",
+    "name": "Welding Technology",
+    "description": "Technical training in welding processes, metallurgy, blueprint reading, and fabrication — leading directly to high-paying trade positions.",
+    "related_careers": ["Welder", "Pipe Fitter", "Structural Steel Worker", "Quality Control Inspector", "Welding Engineer"],
+    "recommended_subjects": ["Physics", "Chemistry", "Shop Class", "Mathematics", "Technical Drawing"],
+    "skills_built": ["MIG, TIG, and stick welding", "blueprint reading", "metal properties", "fabrication", "quality inspection"],
+    "typical_degree_types": ["Certificate", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_hvac_technology",
+    "name": "HVAC Technology",
+    "description": "Applied training in heating, ventilation, air conditioning, and refrigeration systems — including electrical, controls, and energy efficiency.",
+    "related_careers": ["HVAC Technician", "Building Automation Technician", "Energy Auditor", "Refrigeration Technician"],
+    "recommended_subjects": ["Physics", "Chemistry", "Electricity/Electronics", "Mathematics"],
+    "skills_built": ["refrigerant handling (EPA 608)", "electrical diagnostics", "ductwork design", "load calculations", "preventive maintenance"],
+    "typical_degree_types": ["Certificate", "Associate of Applied Science"]
+  },
+  {
+    "id": "major_electrician_apprenticeship",
+    "name": "Electrical Apprenticeship",
+    "description": "Earn-while-you-learn pathway into licensed electrical work — combining on-the-job training with classroom instruction over 4-5 years.",
+    "related_careers": ["Electrician", "Solar Installer", "Industrial Controls Technician", "Building Inspector", "Electrical Contractor"],
+    "recommended_subjects": ["Physics", "Mathematics", "Electricity/Electronics", "AP Physics"],
+    "skills_built": ["electrical code (NEC)", "wiring and conduit", "panel installation", "safety protocols", "blueprint reading"],
+    "typical_degree_types": ["Journeyman License (state-issued)", "Associate of Applied Science (some programs)"]
+  },
+  {
+    "id": "major_illustration",
+    "name": "Illustration",
+    "description": "Fine arts discipline focused on visual storytelling for publishing, advertising, gaming, and media — developing a distinct artistic voice and technical craft.",
+    "related_careers": ["Illustrator", "Graphic Designer", "Concept Artist", "Art Director", "Animator"],
+    "recommended_subjects": ["AP Studio Art", "Art History", "Photography", "Creative Writing"],
+    "skills_built": ["drawing and composition", "digital illustration (Procreate, Photoshop)", "character design", "visual storytelling", "portfolio development"],
+    "typical_degree_types": ["Bachelor of Fine Arts", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_journalism",
+    "name": "Journalism",
+    "description": "Training in reporting, writing, editing, and multimedia storytelling — covering ethics, media law, and the digital news landscape.",
+    "related_careers": ["Journalist", "Content Creator", "Communications Manager", "Documentary Filmmaker", "Author"],
+    "recommended_subjects": ["English", "AP Language and Composition", "Government", "History", "Photography"],
+    "skills_built": ["reporting and interviewing", "AP style writing", "fact-checking", "multimedia production", "digital publishing"],
+    "typical_degree_types": ["Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_communication_studies",
+    "name": "Communication Studies",
+    "description": "Study of human communication — interpersonal, mass media, organizational, and digital — preparing students for careers in media, business, and public affairs.",
+    "related_careers": ["Marketing Manager", "Journalist", "Public Relations Specialist", "Event Planner", "Content Creator", "Human Resources Manager"],
+    "recommended_subjects": ["English", "Speech", "AP Language", "Psychology", "Sociology"],
+    "skills_built": ["public speaking", "writing", "media production", "research", "interpersonal communication"],
+    "typical_degree_types": ["Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_human_computer_interaction",
+    "name": "Human-Computer Interaction",
+    "description": "Interdisciplinary study of how people interact with technology — combining psychology, design, and computing to create better user experiences.",
+    "related_careers": ["UX/UI Designer", "UX Researcher", "Product Designer", "Accessibility Specialist", "AI Product Manager"],
+    "recommended_subjects": ["AP Computer Science", "Psychology", "Art", "Statistics", "Sociology"],
+    "skills_built": ["user research methods", "usability testing", "interaction design", "prototyping", "cognitive psychology"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_geography",
+    "name": "Geography",
+    "description": "Study of spatial patterns on Earth — physical and human geography, environmental analysis, and mapping — often combined with GIS training.",
+    "related_careers": ["Geospatial Engineer", "Environmental Scientist", "Urban Planner", "Intelligence Analyst", "Conservation Scientist"],
+    "recommended_subjects": ["AP Human Geography", "AP Environmental Science", "Statistics", "Earth Science"],
+    "skills_built": ["spatial analysis", "fieldwork", "GIS basics", "regional analysis", "environmental geography"],
+    "typical_degree_types": ["Bachelor of Arts", "Bachelor of Science"]
+  },
+  {
+    "id": "major_public_health",
+    "name": "Public Health",
+    "description": "Study of population health — epidemiology, health policy, global health, and health promotion — focused on preventing disease and improving community well-being.",
+    "related_careers": ["Public Health Analyst", "Epidemiologist", "Health Educator", "Policy Analyst", "Social Worker"],
+    "recommended_subjects": ["Biology", "Statistics", "AP Government", "Sociology", "Chemistry"],
+    "skills_built": ["epidemiology", "health data analysis", "program evaluation", "community health education", "health policy"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts", "Master of Public Health (advanced)"]
+  },
+  {
+    "id": "major_biology",
+    "name": "Biology",
+    "description": "Broad study of living systems from molecules to ecosystems — foundational for medical, research, environmental, and biotech careers.",
+    "related_careers": ["Wildlife Biologist", "Environmental Scientist", "Physician", "Pharmacist", "Genetic Counselor", "Biomedical Engineer"],
+    "recommended_subjects": ["AP Biology", "AP Chemistry", "AP Environmental Science", "Statistics", "Calculus"],
+    "skills_built": ["laboratory techniques", "scientific writing", "ecology", "genetics", "experimental design"],
+    "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  }
+]

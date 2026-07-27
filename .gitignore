@@ -1,0 +1,26 @@
+# Virtual environments
+.venv_win/
+.venv_linux/
+.venv*/
+
+# Secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local database
+data/memory.db
+data/*.sqlite
+data/*.db
+
+# Streamlit
+.streamlit/
+
+# Claude
+.claude/*.local.json
+
+# Misc
+.DS_Store
+Thumbs.db

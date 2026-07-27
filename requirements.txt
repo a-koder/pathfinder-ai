@@ -1,0 +1,7 @@
+streamlit
+openai
+pinecone
+python-dotenv
+pydantic
+langsmith
+pyyaml

@@ -1,0 +1,452 @@
+[
+  {
+    "id": "interest_technology",
+    "label": "Technology & Computers",
+    "category": "STEM",
+    "description": "Building apps, coding, exploring how software and hardware work.",
+    "example_activities": ["coding personal projects", "playing with Raspberry Pi", "modding games", "building websites"],
+    "career_directions": ["Software Engineer", "Cybersecurity Analyst", "AI Engineer", "Data Scientist", "DevOps Engineer", "Technical Writer", "IT Support Specialist", "Database Administrator", "Cloud Architect", "QA Engineer"],
+    "strength_connections": ["logical thinking", "problem solving", "attention to detail"],
+    "pathway_note": "Technology skills transfer into nearly every industry — you can combine coding with fashion, sports, healthcare, or music."
+  },
+  {
+    "id": "interest_gaming",
+    "label": "Gaming & Esports",
+    "category": "Arts & Media",
+    "description": "Playing, designing, streaming, or competing in video games.",
+    "example_activities": ["streaming on Twitch", "game modding", "competitive esports", "tabletop RPGs", "game jam participation"],
+    "career_directions": ["Game Designer", "Game Developer", "Esports Coach", "Esports Manager", "UX Researcher", "Narrative Designer", "3D Artist", "Sound Designer", "Community Manager", "Game Journalist"],
+    "strength_connections": ["strategic thinking", "creativity", "persistence", "teamwork"],
+    "pathway_note": "The gaming industry is larger than Hollywood. Roles range from art and storytelling to engineering and business."
+  },
+  {
+    "id": "interest_art_drawing",
+    "label": "Art & Drawing",
+    "category": "Arts & Media",
+    "description": "Creating visual art through drawing, painting, illustration, or digital media.",
+    "example_activities": ["sketchbooks", "digital illustration", "art competitions", "fan art", "comic creation"],
+    "career_directions": ["Graphic Designer", "Illustrator", "Concept Artist", "Art Director", "Animator", "UX/UI Designer", "Tattoo Artist", "Art Therapist", "Museum Curator", "Children's Book Illustrator"],
+    "strength_connections": ["creativity", "visual thinking", "attention to detail"],
+    "pathway_note": "Art skills power industries from advertising and film to medicine (medical illustrators) and law (forensic artists)."
+  },
+  {
+    "id": "interest_music",
+    "label": "Music",
+    "category": "Arts & Media",
+    "description": "Playing instruments, singing, composing, or producing music.",
+    "example_activities": ["playing in a band", "producing beats", "choir or orchestra", "music theory", "songwriting"],
+    "career_directions": ["Music Producer", "Sound Engineer", "Music Therapist", "Music Educator", "Session Musician", "Composer", "Audio Engineer", "Music Journalist", "Artist Manager", "Music Licensing Specialist"],
+    "strength_connections": ["creativity", "discipline", "emotional intelligence", "pattern recognition"],
+    "pathway_note": "Music careers span performance, business, technology, and therapy — formal training or self-taught paths both lead to real careers."
+  },
+  {
+    "id": "interest_writing",
+    "label": "Writing & Storytelling",
+    "category": "Arts & Media",
+    "description": "Crafting stories, essays, journalism, or creative content.",
+    "example_activities": ["school newspaper", "blogging", "fan fiction", "creative writing club", "poetry"],
+    "career_directions": ["Journalist", "Content Strategist", "Technical Writer", "Screenwriter", "Copywriter", "Editor", "UX Writer", "Grant Writer", "Author", "Communications Manager"],
+    "strength_connections": ["communication", "empathy", "critical thinking", "creativity"],
+    "pathway_note": "Every organization needs writers. Strong writing skills open doors in law, tech, healthcare, policy, and entertainment."
+  },
+  {
+    "id": "interest_film_video",
+    "label": "Film & Video",
+    "category": "Arts & Media",
+    "description": "Making, editing, or directing videos and films.",
+    "example_activities": ["YouTube channel", "short films", "school video productions", "documentary projects", "TikTok content"],
+    "career_directions": ["Film Director", "Video Editor", "Cinematographer", "Documentary Filmmaker", "Brand Content Creator", "VFX Artist", "Broadcast Journalist", "Media Producer", "Podcast Producer", "Social Media Manager"],
+    "strength_connections": ["visual storytelling", "creativity", "technical aptitude", "project management"],
+    "pathway_note": "Video production skills are in high demand for corporate, nonprofit, entertainment, and social media sectors."
+  },
+  {
+    "id": "interest_fashion",
+    "label": "Fashion & Style",
+    "category": "Arts & Media",
+    "description": "Designing clothing, styling outfits, or following fashion trends.",
+    "example_activities": ["thrifting and restyling", "fashion blogging", "sewing", "costume design", "styling friends"],
+    "career_directions": ["Fashion Designer", "Wardrobe Stylist", "Costume Designer", "Merchandiser", "Fashion Buyer", "Textile Designer", "Fashion Marketing Manager", "Trend Forecaster", "Personal Shopper", "Fashion Journalist"],
+    "strength_connections": ["creativity", "visual aesthetics", "cultural awareness", "business acumen"],
+    "pathway_note": "Fashion connects to business, sustainability, technology (wearable tech), and psychology (color theory, consumer behavior)."
+  },
+  {
+    "id": "interest_beauty_wellness",
+    "label": "Beauty & Wellness",
+    "category": "Health & Human Services",
+    "description": "Skincare, makeup, hair, and personal wellness routines.",
+    "example_activities": ["makeup tutorials", "skincare routines", "nail art", "wellness journaling", "aromatherapy"],
+    "career_directions": ["Cosmetologist", "Esthetician", "Makeup Artist", "Beauty Brand Manager", "Wellness Coach", "Nutritionist", "Spa Manager", "Dermatology Assistant", "Beauty Journalist", "Product Developer"],
+    "strength_connections": ["attention to detail", "creativity", "interpersonal skills"],
+    "pathway_note": "Beauty is a $500B global industry. Business, chemistry (cosmetic formulation), and healthcare all connect here."
+  },
+  {
+    "id": "interest_sports_team",
+    "label": "Team Sports",
+    "category": "Sports & Fitness",
+    "description": "Competing in or following team sports like football, basketball, soccer, or volleyball.",
+    "example_activities": ["varsity sports", "intramural leagues", "fantasy sports leagues", "sports statistics tracking", "coaching youth teams"],
+    "career_directions": ["Athletic Trainer", "Sports Coach", "Physical Therapist", "Sports Analyst", "Sports Journalist", "Team Operations Manager", "Sports Agent", "Strength & Conditioning Coach", "Referee", "Sports Marketing Manager"],
+    "strength_connections": ["teamwork", "leadership", "discipline", "resilience"],
+    "pathway_note": "Very few athletes go pro — but sports management, sports medicine, analytics, and media offer thousands of stable careers."
+  },
+  {
+    "id": "interest_sports_individual",
+    "label": "Individual Sports & Fitness",
+    "category": "Sports & Fitness",
+    "description": "Solo athletic pursuits like swimming, track, tennis, golf, or martial arts.",
+    "example_activities": ["training logs", "competitive tournaments", "fitness challenges", "personal records tracking"],
+    "career_directions": ["Personal Trainer", "Physical Therapist", "Occupational Therapist", "Sports Psychologist", "Fitness App Developer", "Wellness Director", "Corporate Wellness Coordinator", "Adventure Guide", "Biomechanics Researcher", "Sports Nutritionist"],
+    "strength_connections": ["self-discipline", "goal-setting", "resilience", "body awareness"],
+    "pathway_note": "Individual sport backgrounds develop mental toughness prized in healthcare, coaching, and performance consulting roles."
+  },
+  {
+    "id": "interest_outdoor_nature",
+    "label": "Outdoors & Nature",
+    "category": "Environment & Agriculture",
+    "description": "Hiking, camping, wildlife observation, conservation, and time in natural settings.",
+    "example_activities": ["trail maintenance volunteering", "birdwatching", "rock climbing", "nature photography", "citizen science apps"],
+    "career_directions": ["Environmental Scientist", "Wildlife Biologist", "Park Ranger", "Conservation Scientist", "Landscape Architect", "Outdoor Educator", "Hydrologist", "Ecotourism Guide", "Climate Scientist", "Forestry Technician"],
+    "strength_connections": ["curiosity", "patience", "physical stamina", "observation skills"],
+    "pathway_note": "Climate change is driving demand for environmental careers across government, nonprofits, and private sector."
+  },
+  {
+    "id": "interest_animals",
+    "label": "Animals & Pets",
+    "category": "Environment & Agriculture",
+    "description": "Caring for, training, or studying animals.",
+    "example_activities": ["shelter volunteering", "pet training", "wildlife rehab", "4-H clubs", "animal photography"],
+    "career_directions": ["Veterinarian", "Veterinary Technician", "Animal Trainer", "Zookeeper", "Marine Biologist", "Animal Behaviorist", "Wildlife Rehabilitator", "Dog Groomer", "Farrier", "Aquarist"],
+    "strength_connections": ["empathy", "patience", "observation", "scientific curiosity"],
+    "pathway_note": "Animal careers range from hands-on care to research science. Vet techs are in high demand and a 2-year degree path is available."
+  },
+  {
+    "id": "interest_cooking_food",
+    "label": "Cooking & Food",
+    "category": "Hospitality & Culinary",
+    "description": "Cooking, baking, food science, or exploring cuisines from around the world.",
+    "example_activities": ["home cooking experiments", "baking competitions", "food blogging", "cultural recipe exploration", "catering events"],
+    "career_directions": ["Chef", "Pastry Chef", "Food Scientist", "Nutritionist", "Restaurant Manager", "Food Stylist", "Culinary Educator", "Food Writer", "Catering Director", "Product Developer (Food & Beverage)"],
+    "strength_connections": ["creativity", "precision", "cultural curiosity", "sensory awareness"],
+    "pathway_note": "Food connects to science, business, media, and culture. Culinary schools, nutrition degrees, and food science programs all lead here."
+  },
+  {
+    "id": "interest_travel",
+    "label": "Travel & Cultures",
+    "category": "Hospitality & Culinary",
+    "description": "Exploring different places, learning about cultures, and experiencing the world.",
+    "example_activities": ["travel journaling", "learning languages", "cultural festivals", "exchange programs", "travel photography"],
+    "career_directions": ["Travel Journalist", "Hotel Manager", "Event Planner", "Foreign Service Officer", "Tour Operator", "Airline Operations Manager", "Cultural Attaché", "Translator", "Travel App Developer", "Global NGO Worker"],
+    "strength_connections": ["curiosity", "adaptability", "communication", "cultural intelligence"],
+    "pathway_note": "International careers span diplomacy, hospitality, business, and journalism. Bilingual candidates are especially competitive."
+  },
+  {
+    "id": "interest_helping_people",
+    "label": "Helping & Counseling",
+    "category": "Health & Human Services",
+    "description": "Supporting others emotionally, mentoring peers, or volunteering in the community.",
+    "example_activities": ["peer tutoring", "crisis hotline volunteering", "mentorship programs", "community service leadership"],
+    "career_directions": ["School Counselor", "Social Worker", "Clinical Psychologist", "Therapist", "Career Coach", "Case Manager", "Youth Program Director", "Substance Abuse Counselor", "Human Resources Manager", "Nonprofit Director"],
+    "strength_connections": ["empathy", "active listening", "emotional regulation", "communication"],
+    "pathway_note": "Mental health careers are among the fastest-growing fields. Many roles are accessible with a bachelor's or master's degree."
+  },
+  {
+    "id": "interest_medicine_health",
+    "label": "Medicine & Health",
+    "category": "Health & Human Services",
+    "description": "How the body works, treating illness, and improving health outcomes.",
+    "example_activities": ["first aid certification", "hospital volunteering", "health science classes", "anatomy interest", "medical documentaries"],
+    "career_directions": ["Physician", "Nurse Practitioner", "Physician Assistant", "Pharmacist", "Physical Therapist", "Radiologist", "Surgeon", "Medical Researcher", "Public Health Analyst", "Healthcare Administrator"],
+    "strength_connections": ["scientific curiosity", "empathy", "precision", "resilience"],
+    "pathway_note": "Healthcare is one of the largest US employers. Clinical and non-clinical pathways (admin, informatics, policy) both offer stable careers."
+  },
+  {
+    "id": "interest_science_biology",
+    "label": "Biology & Life Sciences",
+    "category": "STEM",
+    "description": "How living things work, from cells to ecosystems.",
+    "example_activities": ["science fair projects", "microscopy", "genetics kits", "nature journaling", "anatomy models"],
+    "career_directions": ["Biologist", "Genetic Counselor", "Biomedical Engineer", "Pharmacologist", "Forensic Scientist", "Marine Biologist", "Epidemiologist", "Bioinformatics Scientist", "Lab Technician", "Science Educator"],
+    "strength_connections": ["curiosity", "systematic thinking", "attention to detail", "patience"],
+    "pathway_note": "Biology powers healthcare, agriculture, biotech, and environmental science. Research and applied roles both have strong job markets."
+  },
+  {
+    "id": "interest_science_chemistry",
+    "label": "Chemistry & Materials",
+    "category": "STEM",
+    "description": "Chemical reactions, materials, lab work, and the molecular world.",
+    "example_activities": ["chemistry club", "home experiments", "materials science kits", "perfume or soap making"],
+    "career_directions": ["Chemist", "Chemical Engineer", "Pharmaceutical Scientist", "Materials Scientist", "Cosmetic Formulator", "Food Scientist", "Environmental Chemist", "Forensic Toxicologist", "Quality Control Analyst", "Polymer Engineer"],
+    "strength_connections": ["analytical thinking", "precision", "curiosity", "safety awareness"],
+    "pathway_note": "Chemistry underlies manufacturing, medicine, energy, and consumer goods. Many entry-level roles are available with a bachelor's degree."
+  },
+  {
+    "id": "interest_space_astronomy",
+    "label": "Space & Astronomy",
+    "category": "STEM",
+    "description": "The universe, planets, stars, and space exploration.",
+    "example_activities": ["stargazing", "astronomy clubs", "NASA citizen science", "space documentaries", "telescope use"],
+    "career_directions": ["Aerospace Engineer", "Astrophysicist", "Satellite Systems Engineer", "Mission Control Analyst", "Planetary Geologist", "Space Policy Analyst", "Astronaut", "Science Communicator", "Remote Sensing Analyst", "Defense Systems Engineer"],
+    "strength_connections": ["curiosity", "mathematical thinking", "persistence", "big-picture vision"],
+    "pathway_note": "Space is booming with private companies (SpaceX, Blue Origin, Rocket Lab) creating thousands of engineering and operations roles."
+  },
+  {
+    "id": "interest_math",
+    "label": "Math & Logic",
+    "category": "STEM",
+    "description": "Solving puzzles, proofs, statistics, and mathematical patterns.",
+    "example_activities": ["math olympiad", "logic puzzles", "statistics projects", "coding math simulations"],
+    "career_directions": ["Actuary", "Data Scientist", "Financial Analyst", "Cryptographer", "Operations Research Analyst", "Statistician", "Quantitative Analyst", "Math Educator", "Economist", "Machine Learning Engineer"],
+    "strength_connections": ["analytical thinking", "precision", "abstract reasoning"],
+    "pathway_note": "Math is the gateway to the highest-paying careers across finance, tech, and science. Actuaries in particular have structured, high-income career paths."
+  },
+  {
+    "id": "interest_engineering_building",
+    "label": "Building & Engineering",
+    "category": "STEM",
+    "description": "Designing and building physical things — machines, structures, or devices.",
+    "example_activities": ["LEGO robotics", "woodworking", "electronics kits", "CAD software", "VEX robotics"],
+    "career_directions": ["Mechanical Engineer", "Civil Engineer", "Electrical Engineer", "Structural Engineer", "Product Designer", "Manufacturing Engineer", "Controls Engineer", "Systems Engineer", "Construction Manager", "Aerospace Engineer"],
+    "strength_connections": ["spatial reasoning", "problem solving", "hands-on learning", "precision"],
+    "pathway_note": "Engineering degrees have among the highest starting salaries. Engineering technician roles (2-year degree) are also well-paying."
+  },
+  {
+    "id": "interest_environment_sustainability",
+    "label": "Environment & Sustainability",
+    "category": "Environment & Agriculture",
+    "description": "Climate change, renewable energy, conservation, and sustainable systems.",
+    "example_activities": ["environmental club", "recycling initiatives", "solar energy projects", "sustainability audits"],
+    "career_directions": ["Environmental Engineer", "Sustainability Manager", "Climate Policy Analyst", "Renewable Energy Technician", "Environmental Lawyer", "Green Building Consultant", "Carbon Analyst", "Conservation Biologist", "Water Resources Engineer", "ESG Analyst"],
+    "strength_connections": ["systems thinking", "passion for impact", "scientific curiosity", "advocacy"],
+    "pathway_note": "The green economy is one of the fastest-growing job sectors. Roles exist in engineering, law, finance, and policy."
+  },
+  {
+    "id": "interest_farming_agriculture",
+    "label": "Farming & Agriculture",
+    "category": "Environment & Agriculture",
+    "description": "Growing food, managing land, and understanding agricultural systems.",
+    "example_activities": ["school gardens", "FFA (Future Farmers of America)", "farmers markets", "hydroponics experiments", "animal husbandry"],
+    "career_directions": ["Agronomist", "Agricultural Engineer", "Farm Manager", "Food Systems Analyst", "Agricultural Economist", "Veterinarian", "Horticulturist", "Soil Scientist", "Agricultural Extension Agent", "Precision Agriculture Specialist"],
+    "strength_connections": ["hands-on problem solving", "scientific curiosity", "physical stamina", "business sense"],
+    "pathway_note": "Modern agriculture combines technology (drones, sensors, data) with traditional knowledge. Agri-tech is a fast-growing sector."
+  },
+  {
+    "id": "interest_business_entrepreneurship",
+    "label": "Business & Entrepreneurship",
+    "category": "Business & Finance",
+    "description": "Starting ventures, selling, marketing, and understanding how businesses operate.",
+    "example_activities": ["school store or club", "selling handmade goods", "DECA competitions", "small business ideas", "reading business news"],
+    "career_directions": ["Entrepreneur", "Marketing Manager", "Sales Representative", "Business Analyst", "Operations Manager", "Product Manager", "Brand Strategist", "Management Consultant", "Venture Capitalist", "Supply Chain Manager"],
+    "strength_connections": ["leadership", "risk tolerance", "communication", "strategic thinking"],
+    "pathway_note": "Business degrees are versatile. Entrepreneurship doesn't require a specific major — many successful founders come from engineering, design, or liberal arts."
+  },
+  {
+    "id": "interest_finance_investing",
+    "label": "Finance & Investing",
+    "category": "Business & Finance",
+    "description": "Stocks, budgeting, economics, and understanding how money works.",
+    "example_activities": ["stock market simulation", "personal budgeting", "reading financial news", "Economics class", "mock investing portfolios"],
+    "career_directions": ["Financial Analyst", "Investment Banker", "Financial Planner", "Accountant", "Actuary", "Risk Manager", "Hedge Fund Analyst", "Real Estate Investor", "Corporate Treasurer", "Tax Advisor"],
+    "strength_connections": ["analytical thinking", "numerical fluency", "risk assessment", "discipline"],
+    "pathway_note": "Finance careers span Wall Street to Main Street. CPA, CFA, and CFP credentials open doors beyond a finance degree alone."
+  },
+  {
+    "id": "interest_law_justice",
+    "label": "Law & Justice",
+    "category": "Public Service & Law",
+    "description": "Legal systems, fairness, rights, debate, and advocacy.",
+    "example_activities": ["mock trial", "debate team", "Model UN", "law clinic volunteering", "reading Supreme Court cases"],
+    "career_directions": ["Lawyer", "Paralegal", "Judge", "Public Defender", "Policy Analyst", "Legal Researcher", "Immigration Advocate", "Corporate Counsel", "Human Rights Officer", "Mediator"],
+    "strength_connections": ["argumentation", "research", "writing", "ethical reasoning"],
+    "pathway_note": "Law school follows any bachelor's degree. Pre-law students benefit from majors in political science, philosophy, history, or economics."
+  },
+  {
+    "id": "interest_politics_government",
+    "label": "Politics & Government",
+    "category": "Public Service & Law",
+    "description": "Policy, elections, civic engagement, and public service.",
+    "example_activities": ["student government", "campaign volunteering", "Model UN", "community organizing", "internships with elected officials"],
+    "career_directions": ["Policy Analyst", "Politician", "Campaign Manager", "Government Relations Specialist", "Foreign Service Officer", "City Planner", "Military Officer", "Intelligence Analyst", "Public Affairs Director", "Nonprofit Advocate"],
+    "strength_connections": ["leadership", "communication", "persuasion", "civic passion"],
+    "pathway_note": "Government careers are stable and mission-driven. Paths include civil service, elected office, military, and nonprofit sectors."
+  },
+  {
+    "id": "interest_military_service",
+    "label": "Military & Service",
+    "category": "Public Service & Law",
+    "description": "Serving the country through military, first responder, or public safety roles.",
+    "example_activities": ["JROTC", "Civil Air Patrol", "first aid training", "community emergency response", "military history interest"],
+    "career_directions": ["Military Officer", "Enlisted Servicemember", "Police Officer", "Firefighter", "Emergency Medical Technician", "Intelligence Analyst", "Cybersecurity Analyst (military)", "Logistics Officer", "Military Nurse", "Veteran Services Coordinator"],
+    "strength_connections": ["discipline", "leadership", "physical fitness", "teamwork"],
+    "pathway_note": "Military service funds college education, provides career training, and opens doors to federal civilian careers. Service academies (West Point, Naval Academy) are highly competitive."
+  },
+  {
+    "id": "interest_teaching_education",
+    "label": "Teaching & Education",
+    "category": "Education & Research",
+    "description": "Explaining concepts, mentoring students, and designing learning experiences.",
+    "example_activities": ["tutoring peers", "summer camp counseling", "youth sports coaching", "teaching Sunday school", "creating study guides"],
+    "career_directions": ["K-12 Teacher", "School Counselor", "Curriculum Designer", "Special Education Teacher", "College Professor", "Corporate Trainer", "Educational Technology Designer", "School Principal", "Literacy Coach", "Education Policy Analyst"],
+    "strength_connections": ["communication", "patience", "empathy", "subject passion"],
+    "pathway_note": "Teaching is universally needed and deeply impactful. Advanced degrees open doors to higher education, policy, and leadership roles."
+  },
+  {
+    "id": "interest_research_science",
+    "label": "Research & Discovery",
+    "category": "Education & Research",
+    "description": "Asking questions, running experiments, and advancing knowledge.",
+    "example_activities": ["science fair", "university lab volunteering", "independent reading", "hypothesis testing projects"],
+    "career_directions": ["Research Scientist", "Clinical Trial Researcher", "Social Scientist", "Economist", "Lab Manager", "Data Analyst", "Policy Researcher", "Historian", "Archaeologist", "Science Journalist"],
+    "strength_connections": ["curiosity", "methodical thinking", "patience", "writing"],
+    "pathway_note": "Research careers often require graduate degrees, but research assistant roles are available with a bachelor's. Industry (pharma, tech) research can pay very well."
+  },
+  {
+    "id": "interest_architecture_design",
+    "label": "Architecture & Design",
+    "category": "Arts & Media",
+    "description": "Designing buildings, spaces, interiors, and urban environments.",
+    "example_activities": ["sketching buildings", "Minecraft architecture", "interior redesign projects", "3D modeling software", "architectural tours"],
+    "career_directions": ["Architect", "Interior Designer", "Urban Planner", "Landscape Architect", "Structural Engineer", "Construction Manager", "Real Estate Developer", "Set Designer", "Industrial Designer", "Historic Preservation Specialist"],
+    "strength_connections": ["spatial reasoning", "creativity", "technical precision", "cultural awareness"],
+    "pathway_note": "Architecture requires a 5-year professional degree and licensure. Interior design and urban planning have shorter paths."
+  },
+  {
+    "id": "interest_social_media_content",
+    "label": "Social Media & Content Creation",
+    "category": "Arts & Media",
+    "description": "Building online audiences, creating digital content, and growing brands.",
+    "example_activities": ["YouTube channel", "Instagram growth projects", "TikTok content", "podcasting", "newsletter writing"],
+    "career_directions": ["Content Creator", "Social Media Manager", "Brand Strategist", "Digital Marketing Analyst", "Influencer Marketing Manager", "SEO Specialist", "Email Marketing Specialist", "Community Manager", "Podcast Producer", "Digital Product Creator"],
+    "strength_connections": ["creativity", "consistency", "audience empathy", "data curiosity"],
+    "pathway_note": "Content creation is a career, not just a hobby. Creators who understand analytics and business strategy build sustainable careers."
+  },
+  {
+    "id": "interest_psychology_behavior",
+    "label": "Psychology & Human Behavior",
+    "category": "Health & Human Services",
+    "description": "Why people think, feel, and behave the way they do.",
+    "example_activities": ["psychology electives", "behavior observation journals", "debate about social issues", "reading behavioral science books"],
+    "career_directions": ["Psychologist", "School Counselor", "User Experience Researcher", "Market Research Analyst", "Human Resources Manager", "Behavioral Economist", "Social Worker", "Neuropsychologist", "Organizational Consultant", "Health Coach"],
+    "strength_connections": ["empathy", "curiosity", "analytical thinking", "communication"],
+    "pathway_note": "Psychology is one of the most popular majors and connects to healthcare, tech (UX), business, and education."
+  },
+  {
+    "id": "interest_history_culture",
+    "label": "History & Culture",
+    "category": "Humanities & Social Sciences",
+    "description": "The past, civilizations, cultural heritage, and how societies change over time.",
+    "example_activities": ["history competitions", "genealogy research", "museum visits", "historical fiction writing", "documentary watching"],
+    "career_directions": ["Historian", "Archivist", "Museum Curator", "Archaeologist", "Policy Analyst", "Cultural Heritage Manager", "Lawyer", "Author", "Documentary Filmmaker", "K-12 Teacher"],
+    "strength_connections": ["research", "writing", "critical thinking", "cultural curiosity"],
+    "pathway_note": "History majors develop research and analysis skills valued in law, government, journalism, and management consulting."
+  },
+  {
+    "id": "interest_languages",
+    "label": "Languages & Linguistics",
+    "category": "Humanities & Social Sciences",
+    "description": "Learning foreign languages, understanding how language works, or translation.",
+    "example_activities": ["Duolingo streaks", "language exchange partners", "linguistics classes", "translating family documents", "studying abroad"],
+    "career_directions": ["Interpreter", "Translator", "Foreign Service Officer", "Language Teacher", "Computational Linguist", "Speech-Language Pathologist", "International Business Manager", "Cultural Consultant", "Localization Specialist", "Human Rights Advocate"],
+    "strength_connections": ["communication", "cultural empathy", "pattern recognition", "patience"],
+    "pathway_note": "Bilingual and multilingual professionals command salary premiums in diplomacy, healthcare, law, and technology."
+  },
+  {
+    "id": "interest_philosophy_ethics",
+    "label": "Philosophy & Ethics",
+    "category": "Humanities & Social Sciences",
+    "description": "Big questions about right and wrong, meaning, knowledge, and existence.",
+    "example_activities": ["debate team", "ethics bowl competition", "philosophy club", "reading ethical theory", "analyzing moral dilemmas"],
+    "career_directions": ["Lawyer", "AI Ethics Researcher", "Policy Analyst", "Professor", "Nonprofit Director", "Journalist", "Medical Ethicist", "Corporate Responsibility Manager", "Mediator", "Author"],
+    "strength_connections": ["critical thinking", "argumentation", "writing", "empathy"],
+    "pathway_note": "Philosophy is the best pre-law major by GPA in law school. AI ethics is a fast-growing specialty as technology raises new moral questions."
+  },
+  {
+    "id": "interest_dance_performance",
+    "label": "Dance & Performance",
+    "category": "Arts & Media",
+    "description": "Dancing, acting, musical theater, or performing arts of any kind.",
+    "example_activities": ["school theater", "dance studio", "improv club", "YouTube performance videos", "open mic events"],
+    "career_directions": ["Performer", "Choreographer", "Dance Educator", "Movement Therapist", "Drama Teacher", "Casting Director", "Acting Coach", "Event Entertainer", "Physical Therapist (dance medicine)", "Arts Program Director"],
+    "strength_connections": ["creativity", "discipline", "body awareness", "emotional expression"],
+    "pathway_note": "Performing arts trains discipline, collaboration, and public speaking — skills valued across all industries even if performance isn't the career."
+  },
+  {
+    "id": "interest_crafts_making",
+    "label": "Crafts & Maker Culture",
+    "category": "Arts & Media",
+    "description": "3D printing, woodworking, jewelry making, textile arts, and DIY creation.",
+    "example_activities": ["makerspace projects", "Etsy shop", "3D printing designs", "jewelry crafting", "leatherworking"],
+    "career_directions": ["Product Designer", "Industrial Designer", "Jewelry Designer", "Prop Maker", "Fabrication Technician", "Prototype Engineer", "Art Educator", "Small Business Owner", "Furniture Designer", "Special Effects Artist"],
+    "strength_connections": ["hands-on problem solving", "creativity", "precision", "entrepreneurship"],
+    "pathway_note": "Maker skills translate directly to manufacturing, product design, and technical theater careers. Etsy-to-business paths are increasingly viable."
+  },
+  {
+    "id": "interest_robotics_automation",
+    "label": "Robotics & Automation",
+    "category": "STEM",
+    "description": "Building robots, coding automated systems, and working with mechatronics.",
+    "example_activities": ["FIRST Robotics", "VEX Robotics", "Arduino projects", "drone building", "automation experiments"],
+    "career_directions": ["Robotics Engineer", "Mechatronics Engineer", "Automation Technician", "Controls Engineer", "AI Engineer", "Drone Operator", "Manufacturing Engineer", "Biomedical Engineer", "Research Scientist", "Systems Engineer"],
+    "strength_connections": ["problem solving", "hands-on learning", "coding", "teamwork"],
+    "pathway_note": "Robotics skills are foundational to manufacturing, healthcare (surgical robots), defense, and logistics automation."
+  },
+  {
+    "id": "interest_data_analytics",
+    "label": "Data & Analytics",
+    "category": "STEM",
+    "description": "Finding patterns in data, visualizing insights, and making data-driven decisions.",
+    "example_activities": ["Excel analysis projects", "Kaggle competitions", "sports statistics tracking", "data visualization tools", "market research"],
+    "career_directions": ["Data Analyst", "Business Intelligence Developer", "Data Scientist", "Statistician", "Market Research Analyst", "Financial Analyst", "Operations Analyst", "Supply Chain Analyst", "Healthcare Data Analyst", "Sports Analyst"],
+    "strength_connections": ["analytical thinking", "curiosity", "attention to detail", "communication"],
+    "pathway_note": "Data skills are valued in every industry. Many data analyst roles are accessible with a bachelor's degree and portfolio projects."
+  },
+  {
+    "id": "interest_skilled_trades",
+    "label": "Skilled Trades",
+    "category": "Trades & Technical",
+    "description": "Electrical work, plumbing, welding, HVAC, automotive, and hands-on technical crafts.",
+    "example_activities": ["shop class", "home repair projects", "automotive club", "SkillsUSA competitions", "apprenticeship programs"],
+    "career_directions": ["Electrician", "Plumber", "HVAC Technician", "Welder", "Automotive Technician", "CNC Machinist", "Construction Manager", "Industrial Millwright", "Solar Panel Installer", "Elevator Technician"],
+    "strength_connections": ["hands-on problem solving", "precision", "physical stamina", "troubleshooting"],
+    "pathway_note": "Trades earn excellent wages ($50K-$100K+) without four-year degree debt. Apprenticeships pay while you learn. Licensed trades are recession-resistant."
+  },
+  {
+    "id": "interest_cybersecurity",
+    "label": "Cybersecurity & Hacking",
+    "category": "STEM",
+    "description": "Protecting systems, ethical hacking, and digital security.",
+    "example_activities": ["CTF competitions", "cybersecurity clubs", "TryHackMe / HackTheBox", "security certifications (CompTIA)", "network setup at home"],
+    "career_directions": ["Cybersecurity Analyst", "Penetration Tester", "Security Engineer", "Incident Responder", "Digital Forensics Analyst", "Chief Information Security Officer", "Security Consultant", "Malware Analyst", "Cloud Security Architect", "Bug Bounty Hunter"],
+    "strength_connections": ["problem solving", "curiosity", "persistence", "ethical judgment"],
+    "pathway_note": "Cybersecurity has a massive talent shortage. Certifications (CISSP, CEH, CompTIA Security+) combined with a degree lead to six-figure salaries."
+  },
+  {
+    "id": "interest_healthcare_nursing",
+    "label": "Nursing & Patient Care",
+    "category": "Health & Human Services",
+    "description": "Direct patient care, bedside manner, and clinical support roles.",
+    "example_activities": ["hospital volunteering", "CNA certification", "health science pathways", "first aid training", "nursing home volunteering"],
+    "career_directions": ["Registered Nurse", "Nurse Practitioner", "Physician Assistant", "Medical Assistant", "Emergency Medical Technician", "Surgical Technician", "Respiratory Therapist", "Dental Hygienist", "Occupational Therapist", "Home Health Aide"],
+    "strength_connections": ["empathy", "composure under pressure", "scientific knowledge", "physical stamina"],
+    "pathway_note": "Nursing is one of the most job-secure professions. ADN programs (2-year) allow faster entry; BSN opens management and NP paths."
+  },
+  {
+    "id": "interest_entrepreneurship_startup",
+    "label": "Startups & Innovation",
+    "category": "Business & Finance",
+    "description": "Creating new products, disrupting markets, and building companies from scratch.",
+    "example_activities": ["school pitch competitions", "hackathons", "product prototyping", "reading startup news", "app idea development"],
+    "career_directions": ["Entrepreneur", "Product Manager", "Startup Founder", "Venture Capitalist", "Innovation Consultant", "Business Development Manager", "Growth Hacker", "Chief of Staff", "Operations Lead", "Angel Investor"],
+    "strength_connections": ["risk tolerance", "creativity", "resilience", "leadership"],
+    "pathway_note": "Startup experience is gained at any age. Entrepreneurship programs at universities provide structure; accelerators and incubators provide funding."
+  },
+  {
+    "id": "interest_real_estate",
+    "label": "Real Estate & Construction",
+    "category": "Business & Finance",
+    "description": "Property, development, construction management, and urban development.",
+    "example_activities": ["home renovation interest", "following property markets", "Monopoly strategy", "architecture appreciation", "construction site visits"],
+    "career_directions": ["Real Estate Agent", "Real Estate Developer", "Property Manager", "Commercial Appraiser", "Construction Manager", "Urban Planner", "Mortgage Broker", "Building Inspector", "Real Estate Lawyer", "REIT Analyst"],
+    "strength_connections": ["negotiation", "spatial reasoning", "business acumen", "relationship building"],
+    "pathway_note": "Real estate doesn't require a four-year degree for entry. A real estate license can be earned in months; development paths benefit from business or engineering degrees."
+  }
+]

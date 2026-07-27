@@ -1,0 +1,144 @@
+version: v1
+
+flags:
+  admission_guarantee:
+    risk: high
+    revision: "Remove admission guarantee language; use reach/target/likely framing instead."
+    phrases:
+      - "you will get into"
+      - "guaranteed admission"
+      - "definitely accepted"
+      - "you are certain to be admitted"
+      - "safe admission"
+      - "you will be admitted"
+      - "certain acceptance"
+      - "guaranteed acceptance"
+
+  salary_guarantee:
+    risk: high
+    revision: "Remove salary or job guarantee language; use careful language like 'may lead to' or 'often requires' instead."
+    phrases:
+      - "you will earn"
+      - "guaranteed salary"
+      - "definitely get a job"
+      - "job guaranteed"
+      - "six figures guaranteed"
+      - "guaranteed job"
+      - "will definitely earn"
+      - "guaranteed income"
+
+  overconfidence:
+    risk: medium
+    revision: "Reframe as one of several options rather than a final decision; encourage further exploration."
+    phrases:
+      - "perfect career"
+      - "only path"
+      - "best career for you"
+      - "you should definitely"
+      - "this is your future"
+      - "the only option"
+      - "the only choice"
+
+  pressure_language:
+    risk: medium
+    revision: "Remove pressure language; keep tone supportive and encourage discussing final decisions with a parent, counselor, or trusted adult."
+    phrases:
+      - "you must"
+      - "you have to"
+      - "there is no other option"
+      - "no other option"
+      - "you should only"
+      - "you need to decide now"
+
+  protected_attribute_bias:
+    risk: high
+    revision: "Remove reasoning based on protected attributes; ground recommendations in interests, strengths, and stated goals only."
+    connectors:
+      - "because you're"
+      - "because you are"
+      - "since you're"
+      - "since you are"
+      - "as a"
+    traits:
+      - man
+      - woman
+      - male
+      - female
+      - boy
+      - girl
+      - black
+      - white
+      - asian
+      - hispanic
+      - latino
+      - latina
+      - latinx
+      - christian
+      - muslim
+      - jewish
+      - hindu
+      - buddhist
+      - atheist
+      - gay
+      - lesbian
+      - bisexual
+      - transgender
+      - queer
+      - disabled
+      - disability
+      - elderly
+    window_chars: 40
+
+  missing_gpa_for_college_guidance:
+    risk: medium
+    revision: "Ask for GPA or provide only broad college pathway categories."
+    profile_key: gpa
+    college_keywords:
+      - college
+      - university
+      - admission
+      - campus
+      - "reach school"
+      - "target school"
+      - "likely school"
+      - undergrad
+
+  missing_budget_for_affordability_guidance:
+    risk: medium
+    revision: "Ask for budget preference or provide general cost-awareness language."
+    profile_key: budget_preference
+    affordability_keywords:
+      - afford
+      - affordability
+      - tuition
+      - low-cost
+      - low cost
+      - inexpensive
+      - expensive
+      - scholarship
+      - budget
+      - financial aid
+      - cost of attendance
+
+  missing_location_for_specific_college_guidance:
+    risk: low
+    revision: "Mention that location preference would improve college matching."
+    profile_key: location_preference
+
+  missing_grounding:
+    risk: medium
+    revision: "Ground recommendations in retrieved knowledge base evidence before presenting them as fact."
+
+  insufficient_profile:
+    risk: low
+    revision: "Ask one clarifying question to learn more about the student before giving specific recommendations."
+
+settings:
+  vague_message_max_words: 3
+  sparse_profile_fields:
+    - interests
+    - strengths
+    - career_preferences
+    - favorite_careers
+    - grade_level
+    - gpa

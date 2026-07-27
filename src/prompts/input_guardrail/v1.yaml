@@ -1,0 +1,56 @@
+version: v1
+
+rules:
+  profanity_detected:
+    phrases:
+      - damn
+      - hell
+      - crap
+      - shit
+      - fuck
+      - ass
+      - bitch
+      - bastard
+      - piss
+
+  frustration_detected:
+    phrases:
+      - "this is stupid"
+      - "this is dumb"
+      - "you're useless"
+      - "you are useless"
+      - "i hate this"
+      - "i hate it"
+      - "this doesn't work"
+      - "this is useless"
+      - "waste of time"
+      - "i give up"
+      - "forget it"
+      - "this is pointless"
+      - "you're not helping"
+      - "you are not helping"
+      - "so annoying"
+      - "i'm frustrated"
+      - "i am frustrated"
+      - "why is this so hard"
+
+  prompt_injection_detected:
+    phrases:
+      - "ignore previous instructions"
+      - "ignore all previous instructions"
+      - "ignore the above"
+      - "disregard the above"
+      - "disregard previous instructions"
+      - "you are now"
+      - "reveal your instructions"
+      - "reveal your system prompt"
+      - "show me your system prompt"
+      - "what is your system prompt"
+      - "pretend you are"
+      - "pretend to be"
+      - "new instructions:"
+      - "override your instructions"
+      - "forget everything above"
+      - "ignore your rules"
+      - "jailbreak"
+      - "developer mode"
