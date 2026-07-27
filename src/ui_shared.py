@@ -35,12 +35,20 @@ _FOOTER_CSS = """
 
 def render_header() -> None:
     """App identity header shown once at the top of each page's main content."""
-    st.markdown("# 🧭 PathFinder AI")
+    st.markdown("# 🚀 PathFinder AI")
     st.caption("Explore Possibilities. Discover Your Path.")
 
 
 def render_sidebar_footer() -> None:
-    """Creator credit, links, and version - pinned at the bottom of the sidebar."""
+    """
+    Low-key page links + creator credit, links, and version - pinned at the bottom of
+    the sidebar. Career Guidance is the product; How PathFinder Works exists for
+    reviewers and recruiters, so neither gets a prominent top-level nav bar - both are
+    just quietly reachable down here, same as the "Created by" credit below them.
+    """
+    st.divider()
+    st.page_link("app_pages/chat.py", label="Career Guidance", icon=":material/chat:")
+    st.page_link("app_pages/how_it_works.py", label="How PathFinder Works", icon=":material/menu_book:")
     st.divider()
     st.caption("Created by")
     st.markdown("**Anurag Kabra**")

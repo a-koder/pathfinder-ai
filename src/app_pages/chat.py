@@ -344,7 +344,7 @@ def _render_assistant_response(result: dict) -> None:
     _render_feedback_buttons(result.get("observability_log_id"))
 
     _render_trace_summary(result)
-    with st.expander("Technical details", icon=":material/analytics:"):
+    with st.expander("How PathFinder reached this answer", icon=":material/analytics:"):
         _render_trace(result)
 
 
@@ -379,7 +379,7 @@ if not st.session_state.messages:
     st.info(
         "Tell me what you're into — subjects, hobbies, anything — and I'll help you explore "
         "career and college directions that might fit.",
-        icon=":material/explore:",
+        icon=":material/rocket_launch:",
     )
 
 # Render existing chat history
