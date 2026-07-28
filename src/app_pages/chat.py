@@ -290,54 +290,30 @@ def _render_trace(trace: dict) -> None:
     token_usage_by_model = trace.get("token_usage_by_model", {})
     estimated_cost_usd = trace.get("estimated_cost_usd", 0.0)
 
-    badge_col, score_col = st.columns(2)
-    with badge_col:
-        if badge == "green":
-            st.success("Quality badge: green")
-        elif badge == "amber":
-            st.warning("Quality badge: amber")
-        elif badge == "red":
-            st.error("Quality badge: red")
-        else:
-            st.info(f"Quality badge: {badge}")
-    with score_col:
-        st.metric("Evaluation score", f"{score}/30")
+    # --- Section 1: What we knew about the student going into this turn - shown
+    # first since it's the context that explains most of what follows below (e.g.
+    # a missing-GPA guardrail flag only makes sense once you can see GPA is unset). ---
+    st.markdown("##### What We Knew About the Student")
+    interests = profile.get("interests", [])
+    strengths = profile.get("strengths", [])
+    gpa = profile.get("gpa")
+    favorite_careers = profile.get("favorite_careers", [])
 
-    if revision_attempted:
-        st.caption(
-            ":material/autorenew: This response was automatically regenerated once because "
-            "the initial quality score was below the pass threshold."
-        )
+    st.write(f"- Interests: {', '.join(interests) if interests else 'none yet'}")
+    st.write(f"- Strengths: {', '.join(strengths) if strengths else 'none yet'}")
+    st.write(f"- GPA: {gpa if gpa not in (None, '') else 'not provided'}")
+    if favorite_careers:
+        st.write(f"- Favorite careers: {', '.join(favorite_careers)}")
+    if missing_information:
+        st.write(f"- Missing information: {', '.join(missing_information)}")
+    if next_question:
+        st.write(f"- Next question to ask: {next_question}")
 
-    if evaluation_scores:
-        st.write(
-            "**RASCEF scores:** "
-            + ", ".join(f"{dim}: {val}" for dim, val in evaluation_scores.items())
-        )
-    if evaluation_feedback:
-        st.write(f"**Evaluation feedback:** {' | '.join(evaluation_feedback)}")
+    st.divider()
 
-    st.write(f"**Input guardrail flags:** {', '.join(input_guardrail_flags) if input_guardrail_flags else 'none'}")
-    st.write(f"**Guardrail risk level:** {guardrail_risk_level}")
-    st.write(f"**Guardrail flags:** {', '.join(flags) if flags else 'none'}")
-    if guardrail_required_revisions:
-        st.write(f"**Required revisions:** {' | '.join(guardrail_required_revisions)}")
-
-    if token_usage_by_model:
-        st.write(f"**Estimated cost this turn:** ${estimated_cost_usd:.4f}")
-        st.table(
-            [
-                {
-                    "Model": model,
-                    "Prompt tokens": tokens.get("prompt_tokens", 0),
-                    "Completion tokens": tokens.get("completion_tokens", 0),
-                }
-                for model, tokens in token_usage_by_model.items()
-            ]
-        )
-
+    # --- Section 2: What was retrieved and recommended off of that profile. ---
+    st.markdown("##### Grounding & Recommendations")
     st.write(f"**Retrieved documents:** {doc_count}")
-
     if documents:
         st.table(
             [
@@ -363,22 +339,71 @@ def _render_trace(trace: dict) -> None:
             ]
         )
 
-    st.markdown("**Student profile (known so far)**")
-    interests = profile.get("interests", [])
-    strengths = profile.get("strengths", [])
-    gpa = profile.get("gpa")
-    favorite_careers = profile.get("favorite_careers", [])
+    st.divider()
 
-    st.write(f"- Interests: {', '.join(interests) if interests else 'none yet'}")
-    st.write(f"- Strengths: {', '.join(strengths) if strengths else 'none yet'}")
-    if gpa not in (None, ""):
-        st.write(f"- GPA: {gpa}")
-    if favorite_careers:
-        st.write(f"- Favorite careers: {', '.join(favorite_careers)}")
-    if missing_information:
-        st.write(f"- Missing information: {', '.join(missing_information)}")
-    if next_question:
-        st.write(f"- Next question to ask: {next_question}")
+    # --- Section 3: How that response was judged for quality and safety - this is
+    # what actually explains why the badge above is green vs. amber/red. ---
+    st.markdown("##### Quality & Safety")
+
+    badge_col, score_col = st.columns(2)
+    with badge_col:
+        if badge == "green":
+            st.success("Quality badge: green")
+        elif badge == "amber":
+            st.warning("Quality badge: amber")
+        elif badge == "red":
+            st.error("Quality badge: red")
+        else:
+            st.info(f"Quality badge: {badge}")
+    with score_col:
+        st.metric("Evaluation score", f"{score}/30")
+
+    if revision_attempted:
+        st.caption(
+            ":material/autorenew: This response was automatically regenerated once because "
+            "the initial quality score was below the pass threshold."
+        )
+
+    if evaluation_scores:
+        st.table([{"Dimension": dim.capitalize(), "Score": val} for dim, val in evaluation_scores.items()])
+    if evaluation_feedback:
+        st.markdown("**Evaluation feedback:**")
+        for note in evaluation_feedback:
+            st.write(f"- {note}")
+
+    st.write(f"**Input guardrail flags:** {', '.join(input_guardrail_flags) if input_guardrail_flags else 'none'}")
+    st.write(f"**Guardrail risk level:** {guardrail_risk_level}")
+    if flags:
+        # Paired 1:1 by construction (GuardrailAgent appends to both lists together
+        # for every flag it raises) - safe to zip, unlike scores/feedback above.
+        st.markdown("**Guardrail flags:**")
+        st.table(
+            [
+                {"Flag": flag_name, "Suggested revision": revision}
+                for flag_name, revision in zip(flags, guardrail_required_revisions)
+            ]
+        )
+    else:
+        st.write("**Guardrail flags:** none")
+
+    st.divider()
+
+    # --- Section 4: What this turn cost. ---
+    st.markdown("##### Cost")
+    if token_usage_by_model:
+        st.write(f"**Estimated cost this turn:** ${estimated_cost_usd:.4f}")
+        st.table(
+            [
+                {
+                    "Model": model,
+                    "Prompt tokens": tokens.get("prompt_tokens", 0),
+                    "Completion tokens": tokens.get("completion_tokens", 0),
+                }
+                for model, tokens in token_usage_by_model.items()
+            ]
+        )
+    else:
+        st.write("No usage recorded for this turn.")
 
 
 def _render_assistant_response(result: dict) -> None:
