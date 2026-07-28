@@ -1,6 +1,7 @@
 import config
 from services.llm_service import LLMService
 from services.prompt_loader import load_prompt
+from services.usage_tracker import UsageTracker
 
 _LIST_FIELDS = [
     "short_term_steps",
@@ -39,8 +40,11 @@ class PathPlanningAgent:
     """
     Builds a personalized multi-horizon roadmap - short-term (3-6 months),
     medium-term (1-3 years), and long-term (college prep and career direction) -
-    anchored to the student's profile and the highest-ranked career (or major, or
-    college_pathway, in that priority order) among their recommendations.
+    anchored to the student's profile and whichever recommendation they actually chose.
+    When the student's message names one of last turn's offered recommendations, the
+    orchestrator passes it in as `selected_override` and that wins; otherwise this falls
+    back to the highest-ranked career (or major, or college_pathway, in that priority
+    order) among their recommendations.
 
     Service dependencies: LLMService
     """
@@ -54,22 +58,32 @@ class PathPlanningAgent:
         self,
         profile: dict,
         recommendations: dict,
+        selected_override: dict | None = None,
+        usage: UsageTracker | None = None,
     ) -> dict:
-        """Runs GPT-4o-mini to build a phased roadmap for the selected recommendation."""
+        """
+        Runs GPT-4o-mini to build a phased roadmap for the selected recommendation.
+
+        `selected_override`, when given, is used in place of the career > major >
+        college_pathway priority pick - the orchestrator passes this in when the
+        student's message names one of last turn's offered recommendations, so the
+        roadmap is anchored to what the student actually chose rather than a guess.
+        """
         items = recommendations.get("recommendations", []) if isinstance(recommendations, dict) else []
-        selected = _select_recommendation(items)
+        selected = selected_override if selected_override else _select_recommendation(items)
         selected_title = selected.get("title", "") if isinstance(selected, dict) else ""
+        source = "student_choice" if selected_override else "auto_priority"
 
         if not selected:
-            return self._fallback(selected_title)
+            return self._fallback(selected_title, source)
 
         user_prompt = self._build_user_prompt(profile, selected)
-        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt)
-        parsed = self._validate(raw, selected_title)
+        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
+        parsed = self._validate(raw, selected_title, source)
         if parsed is not None:
             return parsed
 
-        return self._fallback(selected_title)
+        return self._fallback(selected_title, source)
 
     def _build_user_prompt(self, profile: dict, selected: dict) -> str:
         lines = [f"Selected path: {selected.get('title', '')} ({selected.get('type', 'career')})"]
@@ -95,14 +109,14 @@ class PathPlanningAgent:
 
         return "\n".join(lines)
 
-    def _validate(self, raw: dict, fallback_title: str) -> dict | None:
+    def _validate(self, raw: dict, fallback_title: str, source: str) -> dict | None:
         if not isinstance(raw, dict):
             return None
 
         selected_path = raw.get("selected_path")
         selected_path = selected_path.strip() if isinstance(selected_path, str) and selected_path.strip() else fallback_title
 
-        result = {"selected_path": selected_path}
+        result = {"selected_path": selected_path, "source": source}
         for field in _LIST_FIELDS:
             value = raw.get(field)
             result[field] = [str(v) for v in value if v] if isinstance(value, list) else []
@@ -112,10 +126,11 @@ class PathPlanningAgent:
 
         return result
 
-    def _fallback(self, selected_title: str) -> dict:
+    def _fallback(self, selected_title: str, source: str) -> dict:
         """Safe generic roadmap used when the model output is unusable or nothing was selected."""
         return {
             "selected_path": selected_title or "your chosen path",
+            "source": source,
             "short_term_steps": [
                 "Talk with a school counselor about courses and activities that align with this interest.",
             ],

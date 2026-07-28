@@ -16,6 +16,7 @@ _OBSERVABILITY_LOG_ADDITIVE_COLUMNS = {
     "feedback_text": "TEXT DEFAULT NULL",
     "input_guardrail_flags": "TEXT DEFAULT '[]'",
     "revision_attempted": "INTEGER DEFAULT 0",
+    "token_usage_by_model": "TEXT DEFAULT '{}'",
 }
 
 

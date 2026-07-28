@@ -154,6 +154,8 @@ def _render_roadmap(path_plan: dict) -> None:
     if selected_path:
         heading += f" — {selected_path}"
     st.markdown(f"##### {heading}")
+    if path_plan.get("source") == "student_choice":
+        st.caption(":material/check_circle: Built around the path you picked.")
 
     short_term = path_plan.get("short_term_steps", [])
     medium_term = path_plan.get("medium_term_steps", [])
@@ -285,6 +287,8 @@ def _render_trace(trace: dict) -> None:
     evaluation_feedback = trace.get("evaluation_feedback", [])
     input_guardrail_flags = trace.get("input_guardrail_flags", [])
     revision_attempted = trace.get("revision_attempted", False)
+    token_usage_by_model = trace.get("token_usage_by_model", {})
+    estimated_cost_usd = trace.get("estimated_cost_usd", 0.0)
 
     badge_col, score_col = st.columns(2)
     with badge_col:
@@ -318,6 +322,20 @@ def _render_trace(trace: dict) -> None:
     st.write(f"**Guardrail flags:** {', '.join(flags) if flags else 'none'}")
     if guardrail_required_revisions:
         st.write(f"**Required revisions:** {' | '.join(guardrail_required_revisions)}")
+
+    if token_usage_by_model:
+        st.write(f"**Estimated cost this turn:** ${estimated_cost_usd:.4f}")
+        st.table(
+            [
+                {
+                    "Model": model,
+                    "Prompt tokens": tokens.get("prompt_tokens", 0),
+                    "Completion tokens": tokens.get("completion_tokens", 0),
+                }
+                for model, tokens in token_usage_by_model.items()
+            ]
+        )
+
     st.write(f"**Retrieved documents:** {doc_count}")
 
     if documents:

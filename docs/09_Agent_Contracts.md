@@ -96,7 +96,7 @@ observability = ObservabilityAgent(observability_repo)
 
 **When called:** On every student message, via `run_turn(student_name, user_message)`.
 
-**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
+**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `_match_previous_choice()` (checks whether this message names one of last turn's offered recommendations, decision D028) → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` (using the matched item as `selected_override` if one was found) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results and the same `selected_override`) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (persists this turn's offered items for the next turn's choice matching) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
 
 **Parallelization (decision D025):** Discovery and Retrieval both depend only on memory load's output — Discovery needs the pre-turn profile, Retrieval only needs the raw message (its `profile` argument is accepted but unused, see Retrieval Agent below) — and neither depends on the other's output, so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI / Pinecone through a shared, thread-safe SDK client), so this overlaps wait time rather than parallelizing CPU work — no change in output for any given input, only latency. The Input Guardrail check was also moved to run before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
 
@@ -125,8 +125,10 @@ observability = ObservabilityAgent(observability_repo)
   "profile": {"name": "Jordan", "grade_level": "11", "gpa": 3.4, "interests": ["math", "video games"], "...": "..."},
   "missing_information": ["strengths", "career_preferences"],
   "next_question": "What subjects or activities do you feel you excel in?",
-  "path_plan": {"selected_path": "Data Analyst", "short_term_steps": ["..."], "...": "..."},
+  "path_plan": {"selected_path": "Data Analyst", "source": "auto_priority", "short_term_steps": ["..."], "...": "..."},
   "observability_log_id": 27,
+  "token_usage_by_model": {"gpt-4o-mini": {"prompt_tokens": 1957, "completion_tokens": 1618}, "...": "..."},
+  "estimated_cost_usd": 0.0090,
   "discovery_prompt_version": "discovery_v1",
   "recommendation_prompt_version": "recommendation_v1",
   "path_planning_prompt_version": "path_planning_v1",
@@ -148,9 +150,9 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 2. Memory Agent
 
-**Responsibility:** Reads the student's profile and recent conversation history at turn start (`load_memory`). Merges new profile fields into the persisted profile (`update_profile`). Saves both sides of the turn (`save_turn`).
+**Responsibility:** Reads the student's profile and recent conversation history at turn start (`load_memory`). Merges new profile fields into the persisted profile (`update_profile`). Overwrites the turn's offered recommendations for next-turn choice matching (`remember_last_recommendations`, decision D028). Saves both sides of the turn (`save_turn`).
 
-**When called:** `load_memory()` at turn start; `update_profile()` right after Discovery; `save_turn()` at turn end.
+**When called:** `load_memory()` at turn start; `update_profile()` right after Discovery; `remember_last_recommendations()` after the critic/revision loop settles; `save_turn()` at turn end.
 
 **`load_memory(student_name)` output:**
 ```json
@@ -180,6 +182,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 ```
 
 **`update_profile(student_name, profile_updates)` output:** the merged profile dict (same shape as `profile` above). List fields (`interests`, `strengths`, `career_preferences`, `college_preferences`, `favorite_careers`) are merged case-insensitively without duplicates; scalar fields (`grade_level`, `gpa`, the four preference fields) are only overwritten when the new value is non-empty/non-null.
+
+**`remember_last_recommendations(student_id, recommendations)`:** overwrites (does not merge) a `last_recommendations` key on the profile with this turn's offered recommendation items verbatim. Unlike the list fields above, this is not an accumulating trait — it's replaced every turn so it always reflects only what was *just* offered, letting the next turn's `_match_previous_choice()` (in `orchestrator.py`) check whether the student's reply names one of them. Returns nothing; failures are swallowed.
 
 **`save_turn(student_name, user_message, assistant_response, metadata)`:** persists the user and assistant messages. Returns nothing; failures are swallowed.
 
@@ -349,14 +353,17 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **When called:** After Recommendation Agent.
 
-**Input:** `generate_path_plan(profile, recommendations)` — note this takes the *full recommendations dict* from the Recommendation Agent, not a single pre-selected career string.
+**Input:** `generate_path_plan(profile, recommendations, selected_override=None)` — `recommendations` is the *full recommendations dict* from the Recommendation Agent, not a single pre-selected career string. `selected_override`, when given, is a single recommendation item (same shape as one entry in `recommendations["recommendations"]`) that wins over the priority pick below.
 
-**Selection logic:** Given `recommendations["recommendations"]` (already ranked by the Recommendation Agent), the Path Planning Agent picks the highest-ranked `career` item if one exists; otherwise the highest-ranked `major`; otherwise the highest-ranked remaining item (in practice, a college pathway). This priority — career > major > college_pathway — exists because a roadmap anchored to a specific college reads oddly compared to one anchored to a career or major direction (see `docs/12_DECISION_LOG.md`).
+**Selection logic (decision D028, supersedes D018's priority-only rule):**
+1. **Explicit student choice, if present:** The orchestrator checks whether the student's current message names one of *last turn's* offered recommendations (`_match_previous_choice()` in `orchestrator.py`, word-boundary matched against titles stored via `MemoryAgent.remember_last_recommendations()`). If it matches, that exact item is passed in as `selected_override` and used directly — no re-ranking.
+2. **Otherwise, fall back to the original priority order:** given `recommendations["recommendations"]` (already ranked by the Recommendation Agent), pick the highest-ranked `career` item if one exists; otherwise the highest-ranked `major`; otherwise the highest-ranked remaining item (in practice, a college pathway). This priority — career > major > college_pathway — exists because a roadmap anchored to a specific college reads oddly compared to one anchored to a career or major direction.
 
 **Output contract:**
 ```json
 {
   "selected_path": "Data Analyst",
+  "source": "student_choice",
   "short_term_steps": ["Take a statistics elective", "Complete a free Python for Data Science course"],
   "medium_term_steps": ["Major in Statistics or Computer Science", "Complete a data-focused internship"],
   "long_term_steps": ["Build a portfolio of data projects", "Target analyst roles across industries"],
@@ -365,6 +372,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
   "college_preparation_steps": ["Take AP Statistics if available"]
 }
 ```
+
+`source` is `"student_choice"` when `selected_override` was used, `"auto_priority"` otherwise — the Streamlit UI shows a small "Built around the path you picked" note under the roadmap heading when it's `"student_choice"`.
 
 **Validation rules:**
 - At least one item in each of `short_term_steps`, `medium_term_steps`, `long_term_steps`
@@ -470,7 +479,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 10. Observability Agent
 
-**Responsibility:** Writes one row per turn to the local `observability_logs` SQLite table via `ObservabilityRepository`. Captures latency, models used, guardrail/evaluation results, and a cost estimate. Never raises — a logging failure must never break the student's response.
+**Responsibility:** Writes one row per turn to the local `observability_logs` SQLite table via `ObservabilityRepository`. Captures latency, models used, guardrail/evaluation results, and a real cost estimate (decision D029). Never raises — a logging failure must never break the student's response.
 
 **When called:** After Evaluation Agent, before the turn is saved to memory.
 
@@ -494,18 +503,26 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
   "evaluation_scores": {"relevance": 5, "accuracy": 4, "...": "..."},
   "prompt_versions": {"discovery_prompt_version": "discovery_v1", "...": "..."},
   "latency_ms": 4200,
+  "prompt_tokens": 4275,
+  "completion_tokens": 2018,
+  "token_usage_by_model": {
+    "text-embedding-3-small": {"prompt_tokens": 5, "completion_tokens": 0},
+    "gpt-4o-mini": {"prompt_tokens": 1957, "completion_tokens": 1618},
+    "gpt-4o": {"prompt_tokens": 2313, "completion_tokens": 400}
+  },
+  "estimated_cost": 0.0090,
   "error": ""
 }
 ```
 
 **Output:** `log_turn()` returns the new row's `log_id` (`int`), or `None` if the write failed — threaded up through the orchestrator's return value as `observability_log_id` (see Orchestrator above) so the UI can wire HITL feedback to the exact row a response came from.
 
-**Cost calculation (`_estimate_cost` in `observability_agent.py`):**
+**Cost calculation (decision D029 — `src/services/usage_tracker.py`, `UsageTracker`):** `OpenAIClient.complete()`/`.embed()` now return real `response.usage` token counts instead of discarding them. The orchestrator creates one `UsageTracker` per `run_turn()` call and passes it into every LLM/embedding call made that turn (Discovery, Retrieval's embedding, Recommendation, Path Planning, Evaluation, and the display-only enrichment call) — including both attempts if the critic/revision loop retries. `UsageTracker.by_model()` sums usage per model; `estimated_cost_usd()` prices each model's tokens and sums across all of them:
 - `gpt-4o-mini`: $0.15 / 1M input tokens + $0.60 / 1M output tokens
 - `gpt-4o`: $2.50 / 1M input tokens + $10.00 / 1M output tokens
 - `text-embedding-3-small`: $0.02 / 1M tokens
 
-**Known limitation:** `OpenAIClient` does not currently surface `response.usage` token counts, so `prompt_tokens`/`completion_tokens` are always `0` and `estimated_cost_usd` is always `0.0`. This is a documented, known limitation in `observability_agent.py`, not a silent gap — the cost calculation logic is implemented and correct, it just has no real token counts to multiply yet.
+A single turn spans at least 3 different models (generation, evaluation, embedding), so `observability_logs.token_usage_by_model` (additive JSON column) holds the full per-model breakdown; the existing single `prompt_tokens`/`completion_tokens` columns hold the grand total across every model, for a quick-glance figure. `run_turn()`'s return value also includes `token_usage_by_model` and `estimated_cost_usd` directly, which the Streamlit UI's "Technical Details" panel renders as a small table.
 
 **Failure behavior:** Both `ObservabilityAgent.log_turn()` and the orchestrator's call site wrap the write in `try/except` — a SQLite failure never blocks or alters the response returned to the student.
 

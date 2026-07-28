@@ -164,7 +164,7 @@ Every response is scored by the Evaluation Agent (RASCEF, pass threshold 24/30).
 
 Every turn writes one row to the local `observability_logs` SQLite table: timestamp, student id/name, user message, model names (generation/evaluation/embedding), retrieved document count, guardrail flags/risk level, RASCEF score/badge/dimension breakdown, prompt/ruleset versions, latency, and a cost estimate. Logging failures are swallowed at both the agent and the orchestrator call site — a broken log write never affects the response the student sees.
 
-**Cost tracking is currently a placeholder:** `OpenAIClient` doesn't yet surface token usage from the API response, so `estimated_cost_usd` is always `$0.00`. The pricing formula itself (per-model $/1M-token rates) is implemented and correct — it just has nothing to multiply yet.
+**Cost tracking is real, not a placeholder:** `UsageTracker` sums token usage across every LLM/embedding call made in a turn (generation, evaluation, embedding, including a critic/revision retry), broken down per model, and `estimated_cost_usd` is priced from that real breakdown using per-model $/1M-token rates.
 
 ---
 
@@ -238,7 +238,6 @@ Three scenarios, chosen to each showcase a different part of the system in one t
 
 - `src/schemas/models.py` Pydantic models have drifted from the actual dict shapes agents pass around — no runtime validation layer enforces them today (see `docs/09_Agent_Contracts.md`)
 - `DiscoveryAgent` doesn't yet extract `location_preference` / `budget_preference` / `college_type_preference` / `pathway_preference` — those profile fields stay empty unless populated some other way
-- Observability cost tracking always reports `$0.00` — token usage isn't wired up yet
 - No `out_of_scope` guardrail (e.g. scholarship/FAFSA questions aren't redirected — they're passed to the Recommendation Agent, which will attempt a weak, ungrounded answer)
 - No automated `pytest` suite — verification is via the scripts above, run manually against live APIs
 - Name-based student recognition only — no authentication, not suitable for real student data

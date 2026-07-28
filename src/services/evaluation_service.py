@@ -1,6 +1,7 @@
 import config
 from services.llm_service import LLMService
 from services.prompt_loader import load_prompt
+from services.usage_tracker import UsageTracker
 
 
 _RASCEF_DIMENSIONS = ["relevance", "accuracy", "safety", "completeness", "explainability", "fairness"]
@@ -48,6 +49,7 @@ class EvaluationService:
         retrieved_documents: list,
         guardrail_result: dict,
         profile: dict,
+        usage: UsageTracker | None = None,
     ) -> dict | None:
         """Runs GPT-4o as an LLM-as-judge. Returns None if the judge output is unusable."""
         user_prompt = self._build_user_prompt(
@@ -58,6 +60,7 @@ class EvaluationService:
             system_prompt=self._system_prompt,
             user_prompt=user_prompt,
             model=config.EVAL_MODEL,
+            usage=usage,
         )
         return self._validate(raw)
 

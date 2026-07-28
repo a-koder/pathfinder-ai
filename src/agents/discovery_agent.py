@@ -1,6 +1,7 @@
 import config
 from services.llm_service import LLMService
 from services.prompt_loader import load_prompt
+from services.usage_tracker import UsageTracker
 
 _PROFILE_FIELDS = [
     "grade_level",
@@ -46,6 +47,7 @@ class DiscoveryAgent:
         student_name: str,
         user_message: str,
         existing_profile: dict,
+        usage: UsageTracker | None = None,
     ) -> dict:
         """Runs GPT-4o-mini over the latest message and returns a DiscoveryOutput-shaped dict."""
         user_prompt = (
@@ -54,7 +56,7 @@ class DiscoveryAgent:
             f"Student's latest message: {user_message}"
         )
 
-        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt)
+        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
         return self._validate(raw, existing_profile)
 
     def _validate(self, raw: dict, existing_profile: dict) -> dict:

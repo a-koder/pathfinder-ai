@@ -2,6 +2,7 @@ import json
 
 import config
 from infrastructure.openai_client import OpenAIClient
+from services.usage_tracker import UsageTracker
 
 
 class LLMService:
@@ -11,17 +12,38 @@ class LLMService:
         self._client = openai_client
         self._model = config.DEFAULT_MODEL
 
-    def generate_text(self, system_prompt: str, user_prompt: str, model: str | None = None) -> str:
+    def generate_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str | None = None,
+        usage: UsageTracker | None = None,
+    ) -> str:
         """Return the raw text completion for a system/user prompt pair."""
-        return self._client.complete(model=model or self._model, messages=self._messages(system_prompt, user_prompt))
+        resolved_model = model or self._model
+        text, prompt_tokens, completion_tokens = self._client.complete(
+            model=resolved_model, messages=self._messages(system_prompt, user_prompt),
+        )
+        if usage is not None:
+            usage.record(resolved_model, prompt_tokens, completion_tokens)
+        return text
 
-    def generate_json(self, system_prompt: str, user_prompt: str, model: str | None = None) -> dict:
+    def generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str | None = None,
+        usage: UsageTracker | None = None,
+    ) -> dict:
         """Return a parsed JSON dict, or {} if the model did not return valid JSON."""
-        raw = self._client.complete(
-            model=model or self._model,
+        resolved_model = model or self._model
+        raw, prompt_tokens, completion_tokens = self._client.complete(
+            model=resolved_model,
             messages=self._messages(system_prompt, user_prompt),
             response_format={"type": "json_object"},
         )
+        if usage is not None:
+            usage.record(resolved_model, prompt_tokens, completion_tokens)
         try:
             parsed = json.loads(raw)
         except (json.JSONDecodeError, TypeError):

@@ -60,6 +60,21 @@ class MemoryAgent:
         except Exception:
             pass
 
+    def remember_last_recommendations(self, student_id: int, recommendations: list[dict]) -> None:
+        """
+        Overwrites (does not merge) the profile's "last_recommendations" - the items
+        offered this turn, verbatim. Unlike interests/strengths, this represents the
+        current turn's menu, not an accumulating trait, so the next turn can check
+        whether the student's reply names one of THESE items rather than piling every
+        past recommendation into one growing list. Swallows failures.
+        """
+        try:
+            profile = self._profiles.get_profile(student_id)
+            profile["last_recommendations"] = recommendations
+            self._profiles.upsert_profile(student_id, profile)
+        except Exception:
+            pass
+
     def update_profile(self, student_name: str, profile_updates: dict) -> dict:
         """
         Merge new profile fields into the student's persisted profile and save it.

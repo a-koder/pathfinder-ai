@@ -1,4 +1,5 @@
 import concurrent.futures
+import re
 import time
 from datetime import datetime, timezone
 
@@ -17,6 +18,7 @@ from services.retrieval_service import RetrievalService
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 from services.evaluation_service import EvaluationService
+from services.usage_tracker import UsageTracker
 
 from agents.memory_agent import MemoryAgent
 from agents.input_guardrail_agent import InputGuardrailAgent
@@ -132,7 +134,7 @@ _ENRICHMENT_SYSTEM_PROMPT = (
 )
 
 
-def _enrich_recommendations(recommendation_items: list[dict]) -> list[dict]:
+def _enrich_recommendations(recommendation_items: list[dict], usage: UsageTracker | None = None) -> list[dict]:
     """
     Adds fun_facts and future_outlook to each recommendation, for display only. Generated
     fresh every turn from a small standalone LLM call - not the RecommendationAgent's prompt
@@ -146,7 +148,9 @@ def _enrich_recommendations(recommendation_items: list[dict]) -> list[dict]:
     enrichment = {}
     try:
         user_prompt = "Titles:\n" + "\n".join(f"- {title}" for title in titles)
-        raw = _llm_service.generate_json(system_prompt=_ENRICHMENT_SYSTEM_PROMPT, user_prompt=user_prompt)
+        raw = _llm_service.generate_json(
+            system_prompt=_ENRICHMENT_SYSTEM_PROMPT, user_prompt=user_prompt, usage=usage,
+        )
         if isinstance(raw, dict):
             enrichment = raw.get("enrichment", {}) or {}
     except Exception:
@@ -166,6 +170,27 @@ def _enrich_recommendations(recommendation_items: list[dict]) -> list[dict]:
     return enriched
 
 
+def _match_previous_choice(user_message: str, previous_recommendations: list[dict]) -> dict | None:
+    """
+    Checks whether the student's message names one of the recommendations offered last
+    turn (e.g. replying to "Which of these resonates most with you?" with "the wildlife
+    biologist one"). Word-boundary matched so a short title like "Art" doesn't false-hit
+    inside "smart". Returns the matching item (same shape as a RecommendationAgent item,
+    since it IS one, stored verbatim by remember_last_recommendations) so PathPlanningAgent
+    can build a roadmap around exactly what the student picked, instead of the
+    career > major > college_pathway priority guess. None if nothing matches.
+    """
+    if not user_message or not previous_recommendations:
+        return None
+
+    message_lower = user_message.lower()
+    for item in previous_recommendations:
+        title = (item.get("title") or "").strip() if isinstance(item, dict) else ""
+        if title and re.search(r"\b" + re.escape(title.lower()) + r"\b", message_lower):
+            return item
+    return None
+
+
 def _generate_and_score(
     student_name: str,
     user_message: str,
@@ -173,21 +198,27 @@ def _generate_and_score(
     retrieval: dict,
     input_guardrail_flags: list,
     revision_attempted: bool,
+    selected_override: dict | None = None,
+    usage: UsageTracker | None = None,
 ) -> tuple[dict, dict, str, dict, dict, dict]:
     """
     Runs one full generate-and-check attempt: recommendation -> path planning -> response
     assembly -> post-generation guardrails -> RASCEF evaluation. Used for both the initial
     attempt and the single critic/revision retry, so both attempts go through identical logic.
+    Both attempts record into the same `usage` tracker, so a retry's tokens are counted too.
     """
     recommendations = _recommendation.generate_recommendations(
         user_message=user_message,
         profile=current_profile,
         retrieved_context=retrieval,
+        usage=usage,
     )
 
     path_plan = _path_planning.generate_path_plan(
         profile=current_profile,
         recommendations=recommendations,
+        selected_override=selected_override,
+        usage=usage,
     )
 
     response_text = _format_response_text(student_name, recommendations)
@@ -213,6 +244,7 @@ def _generate_and_score(
         guardrail_result=guardrail,
         input_guardrail_flags=input_guardrail_flags,
         revision_attempted=revision_attempted,
+        usage=usage,
     )
 
     return recommendations, path_plan, response_text, response_payload, guardrail, evaluation
@@ -261,8 +293,8 @@ def run_turn(student_name: str, user_message: str) -> dict:
 
     Agent sequence:
       input guardrail → memory.load → [discovery ‖ retrieval] → merge profile →
-      recommendation → path_planning → guardrail → evaluation →
-      (critic/revision retry, max 1) → observability → memory.save
+      match previous choice → recommendation → path_planning → guardrail → evaluation →
+      (critic/revision retry, max 1) → remember recommendations → observability → memory.save
 
     Discovery and Retrieval run concurrently on worker threads: Discovery only needs the
     pre-turn profile from memory.load, and Retrieval only needs the raw user_message (its
@@ -270,6 +302,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
     other's output, so there is no behavior change from running them in parallel.
     """
     start_time = time.perf_counter()
+    usage = UsageTracker()
 
     # 1. Input guardrail - detection only, a pure function of the raw message, so it can run
     # before memory load with no change in output.
@@ -290,12 +323,14 @@ def run_turn(student_name: str, user_message: str) -> dict:
             student_name=student_name,
             user_message=user_message,
             existing_profile=memory["profile"],
+            usage=usage,
         )
         retrieval_future = pool.submit(
             _retrieval.retrieve_relevant_context,
             user_message=user_message,
             profile=memory["profile"],
             top_k=5,
+            usage=usage,
         )
         discovery = discovery_future.result()
         retrieval = retrieval_future.result()
@@ -309,10 +344,17 @@ def run_turn(student_name: str, user_message: str) -> dict:
 
     input_guardrail_flags = input_guardrail.get("flags", [])
 
+    # 4c. Check whether this message names one of last turn's offered recommendations
+    # (e.g. answering "Which of these resonates most with you?") - if so, the path plan
+    # is anchored to that explicit choice instead of the career > major > college_pathway
+    # priority guess.
+    selected_override = _match_previous_choice(user_message, current_profile.get("last_recommendations", []))
+
     # 5-9. Generate recommendations, path plan, response, guardrails, and evaluation
     recommendations, path_plan, response_text, response_payload, guardrail, evaluation = _generate_and_score(
         student_name, user_message, current_profile, retrieval,
         input_guardrail_flags=input_guardrail_flags, revision_attempted=False,
+        selected_override=selected_override, usage=usage,
     )
 
     # 9b. Critic / revision loop - at most one retry, only when the RASCEF score is low
@@ -322,6 +364,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
         recommendations, path_plan, response_text, response_payload, guardrail, evaluation = _generate_and_score(
             student_name, user_message, current_profile, retrieval,
             input_guardrail_flags=input_guardrail_flags, revision_attempted=True,
+            selected_override=selected_override, usage=usage,
         )
 
     # 9c. Append a note if the (possibly revised) response still needs more information
@@ -329,14 +372,19 @@ def run_turn(student_name: str, user_message: str) -> dict:
         response_text = f"{response_text}\n\n_{_REVISION_NEEDED_NOTE}_"
         response_payload["response"] = response_text
 
-    # 9d. Display-only enrichment (fun facts, future outlook) - runs after guardrails and
+    # 9d. Remember this turn's offered recommendations so the next turn can recognize
+    # the student's reply naming one of them (see 4c above).
+    _memory.remember_last_recommendations(student_id, recommendations.get("recommendations", []))
+
+    # 9e. Display-only enrichment (fun facts, future outlook) - runs after guardrails and
     # evaluation have already scored the response, so it never affects RASCEF or guardrails.
-    enriched_recommendation_items = _enrich_recommendations(recommendations.get("recommendations", []))
+    enriched_recommendation_items = _enrich_recommendations(recommendations.get("recommendations", []), usage=usage)
 
     # 10. Log turn to observability - never let a logging failure break the response
     end_time = time.perf_counter()
     log_id = None
     try:
+        prompt_tokens, completion_tokens = usage.totals()
         log_id = _observability.log_turn({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "student_id": student_id,
@@ -355,6 +403,10 @@ def run_turn(student_name: str, user_message: str) -> dict:
             "prompt_versions": config.prompt_version_metadata(),
             "revision_attempted": revision_attempted,
             "latency_ms": int((end_time - start_time) * 1000),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "token_usage_by_model": usage.by_model(),
+            "estimated_cost": usage.estimated_cost_usd(),
             "error": "",
         })
     except Exception:
@@ -394,5 +446,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
         "next_question": discovery.get("next_question", ""),
         "path_plan": path_plan,
         "observability_log_id": log_id,
+        "token_usage_by_model": usage.by_model(),
+        "estimated_cost_usd": usage.estimated_cost_usd(),
         **config.prompt_version_metadata(),
     }

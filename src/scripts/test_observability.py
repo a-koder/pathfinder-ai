@@ -66,6 +66,10 @@ def run() -> None:
         print(f"  eval_score: {log.get('eval_score')}  quality_badge: {log.get('quality_badge')}")
         print(f"  evaluation_scores: {log.get('evaluation_scores')}")
         print(f"  latency_ms: {log.get('latency_ms')}  estimated_cost_usd: {log.get('estimated_cost_usd')}")
+        print(
+            f"  prompt_tokens: {log.get('prompt_tokens')}  completion_tokens: {log.get('completion_tokens')}  "
+            f"token_usage_by_model: {log.get('token_usage_by_model')}"
+        )
         print(f"  error: {log.get('error')!r}")
 
     print(f"\nCheck: log saved for student_id {student_id}: {'OK' if student_logs else 'MISSING'}")

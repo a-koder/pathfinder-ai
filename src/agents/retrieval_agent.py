@@ -1,4 +1,5 @@
 from services.retrieval_service import RetrievalService
+from services.usage_tracker import UsageTracker
 
 
 def _normalize_document(result: dict) -> dict:
@@ -39,9 +40,10 @@ class RetrievalAgent:
         user_message: str,
         profile: dict,
         top_k: int = 5,
+        usage: UsageTracker | None = None,
     ) -> dict:
         """Runs RetrievalService.search_all() and returns a RetrievalOutput-shaped dict."""
-        results = self._retrieval_service.search_all(user_message, top_k=top_k)
+        results = self._retrieval_service.search_all(user_message, top_k=top_k, usage=usage)
         retrieved_documents = [_normalize_document(r) for r in results]
 
         scores = [d["score"] for d in retrieved_documents]

@@ -176,7 +176,7 @@ Each response is scored 1–5 per dimension by GPT-4o (LLM-as-judge), with a rul
 
 ## Observability
 
-Every turn writes one row to `observability_logs` via `ObservabilityRepository`: timestamp, student id/name, user message, model names (generation/evaluation/embedding), retrieved doc count, guardrail flags/risk level, RASCEF score/badge/dimension breakdown, prompt versions, latency, and a cost estimate. Cost is currently always `$0.00` — `OpenAIClient` doesn't yet surface token usage (a documented, known limitation in `observability_agent.py`), the pricing math itself is implemented and correct.
+Every turn writes one row to `observability_logs` via `ObservabilityRepository`: timestamp, student id/name, user message, model names (generation/evaluation/embedding), retrieved doc count, guardrail flags/risk level, RASCEF score/badge/dimension breakdown, prompt versions, latency, and a real cost estimate. `UsageTracker` (decision D029) sums token usage across every LLM/embedding call made that turn, per model, and `estimated_cost_usd` is priced from that real breakdown — no longer a placeholder.
 
 ## Prompt Governance
 
@@ -259,7 +259,6 @@ No `pytest`-style `tests/` directory — verification is done via standalone scr
 
 - `src/schemas/models.py` Pydantic models have drifted from the actual dict shapes agents pass around (see `docs/09_Agent_Contracts.md`) — no runtime validation layer enforces them today
 - `DiscoveryAgent` doesn't yet extract `location_preference` / `budget_preference` / `college_type_preference` / `pathway_preference`, so those `StudentProfile` fields stay empty unless populated some other way
-- Observability cost tracking is wired up but always reports `$0.00` — `OpenAIClient` doesn't surface token usage yet
 - No automated `pytest` suite — verification is via the `src/scripts/test_*.py` scripts listed above, run manually against live APIs
 - `feedback_text` (free-text HITL comment) has no UI entry point yet — the 👍/👎 buttons are wired, but free text is only reachable via `ObservabilityRepository` directly (or `test_human_feedback.py`)
 - No `out_of_scope` guardrail — scholarship/FAFSA questions aren't redirected, they're passed to the Recommendation Agent, which will attempt a weak, ungrounded answer

@@ -11,6 +11,33 @@ Use these diagrams in the capstone presentation to move from "I built a chatbot"
 
 ---
 
+## At a Glance
+
+**Read this one first.** Everything below is the detailed version — RAG internals, memory schema, guardrail rules, observability fields. This is just the call order, so the detailed diagrams have somewhere to hang.
+
+```mermaid
+flowchart LR
+    S["Student"] --> UI["Chat UI"]
+    UI --> ORC["Orchestrator"]
+    ORC --> STEPS
+
+    subgraph STEPS ["One turn, in order"]
+        direction LR
+        IGA["Input\nGuardrail"] --> MEM["Memory\n(load)"]
+        MEM --> PAR["Discovery ‖ Retrieval\n(concurrent)"]
+        PAR --> REC["Recommendation"]
+        REC --> PLAN["Path\nPlanning"]
+        PLAN --> GRD["Guardrail\n(safety check)"]
+        GRD --> EVAL["Evaluation\n(RASCEF score)"]
+    end
+
+    STEPS --> UI
+```
+
+Every box above is one of the 10 agents; every diagram below zooms into one part of this same path. Section 2 expands the full layered architecture, Section 3 gives the exact sequence with the critic/revision retry, and Sections 4-9 go deep on one piece each (RAG, memory, guardrails, observability, prompt governance).
+
+---
+
 ## 2. High-Level System Architecture
 
 **What this shows:** The full system layered top to bottom — from the student interface down through orchestration, retrieval, agents, safety checks, and memory. Each layer has a distinct responsibility.
@@ -129,11 +156,13 @@ sequenceDiagram
     ORC->>MA: Merge profile updates + persist
     MA-->>ORC: Merged profile
 
+    Note over ORC: Does this message name one of LAST turn's offered<br/>recommendations? (decision D028) If so, remember it as<br/>selected_override for Path Planning below.
+
     ORC->>RA: Generate grounded response
     Note over ORC,RA: System prompt includes profile + retrieved context + history
     RA-->>ORC: Draft recommendations
 
-    ORC->>PPA: Build phased roadmap for top recommendation
+    ORC->>PPA: Build phased roadmap<br/>(selected_override if the student named one, else top recommendation)
     PPA-->>ORC: Roadmap
 
     ORC->>GA: Check response for unsafe claims
@@ -154,6 +183,9 @@ sequenceDiagram
         EA-->>ORC: Final scores
         EA->>LS: Trace (revision_attempted: true)
     end
+
+    ORC->>MA: Remember this turn's offered recommendations<br/>(for next turn's choice matching)
+    MA-->>ORC: Confirmed
 
     ORC->>OL: Record latency, scores, flags, prompt versions
     OL-->>ORC: log_id
@@ -326,7 +358,7 @@ flowchart TD
     end
 
     subgraph PPA_box ["Path Planning Agent"]
-        PPA1["Build a phased roadmap for the top recommendation"]
+        PPA1["Build a phased roadmap for the student's chosen path -\nor the top recommendation if nothing was chosen yet"]
         PPA2["Short-term, medium-term, long-term steps"]
     end
 
@@ -424,7 +456,7 @@ flowchart TD
     subgraph Meta ["Captured Metadata"]
         M1["Model names\ngeneration / evaluation / embedding"]
         M2["Prompt versions\ndiscovery, recommendation, path_planning,\nrascef, guardrail, input_guardrail"]
-        M3["Estimated cost USD\ncalculated from token counts - currently\nalways $0.00, token usage not yet wired up"]
+        M3["Estimated cost USD\nreal token counts via UsageTracker,\nsummed across every model called this turn"]
         M4["Latency ms\nRound-trip time for the full turn"]
         M5["Retrieved document count\nFrom Pinecone"]
         M6["Input guardrail flags\nprofanity / frustration / prompt-injection"]
@@ -450,7 +482,7 @@ flowchart TD
     LOG --> HITL
 ```
 
-**From an Engineering Manager perspective:** Observability is the difference between a system you trust and a system you hope works. Every logged field has a specific operational use case — prompt versions let you attribute a quality regression to a specific prompt change, latency flags UX regressions, guardrail frequency reveals misuse patterns, `revision_attempted` frequency reveals how often the critic loop is doing real work, and eval score trends reveal prompt drift before users notice it. Cost tracking is implemented but currently always reports $0.00 — `OpenAIClient` doesn't yet surface token usage (a documented, non-blocking limitation).
+**From an Engineering Manager perspective:** Observability is the difference between a system you trust and a system you hope works. Every logged field has a specific operational use case — prompt versions let you attribute a quality regression to a specific prompt change, latency flags UX regressions, guardrail frequency reveals misuse patterns, `revision_attempted` frequency reveals how often the critic loop is doing real work, and eval score trends reveal prompt drift before users notice it. Cost tracking reports a real per-turn estimate (decision D029) — `UsageTracker` sums token usage across every model called that turn (generation, evaluation, embedding, including a critic/revision retry) and `observability_logs.token_usage_by_model` holds the full per-model breakdown alongside the summed `estimated_cost_usd`.
 
 ---
 

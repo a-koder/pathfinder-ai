@@ -47,7 +47,7 @@ Many high school students are unsure what careers exist beyond the familiar defa
 - RASCEF evaluation (Relevance, Accuracy, Safety, Completeness, Explainability, Fairness) via GPT-4o LLM-as-judge, with a rule-based fallback and a single automatic critic/revision retry when the score is below threshold
 - Human-in-the-loop 👍/👎 feedback on every response, no authentication required
 - Per-turn observability logging to SQLite, with optional LangSmith tracing
-- Cost tracking scaffolding per call (token usage not yet wired to the OpenAI SDK — see Known Limitations in `docs/99_REFERENCE.md`)
+- Real per-turn cost tracking, broken down per model (`UsageTracker`, decision D029 — see `docs/99_REFERENCE.md`)
 
 ---
 

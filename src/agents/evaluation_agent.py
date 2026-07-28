@@ -1,6 +1,7 @@
 import config
 from services.evaluation_service import EvaluationService
 from services import tracing_service
+from services.usage_tracker import UsageTracker
 
 _NOT_EVALUATED_RESULT = {
     "scores": {
@@ -41,6 +42,7 @@ class EvaluationAgent:
         guardrail_result: dict,
         input_guardrail_flags: list | None = None,
         revision_attempted: bool = False,
+        usage: UsageTracker | None = None,
     ) -> dict:
         response_text = response_payload.get("response", "")
         recommendations_payload = response_payload.get("recommendations", {})
@@ -55,7 +57,7 @@ class EvaluationAgent:
 
         result = self._evaluate_with_fallback(
             user_message, response_text, recommendation_items, path_plan,
-            retrieved_documents, guardrail_result, profile,
+            retrieved_documents, guardrail_result, profile, usage,
         )
 
         self._trace(
@@ -67,7 +69,7 @@ class EvaluationAgent:
 
     def _evaluate_with_fallback(
         self, user_message, response_text, recommendation_items, path_plan,
-        retrieved_documents, guardrail_result, profile,
+        retrieved_documents, guardrail_result, profile, usage=None,
     ) -> dict:
         try:
             judged = self._evaluation_service.evaluate_with_llm_judge(
@@ -78,6 +80,7 @@ class EvaluationAgent:
                 retrieved_documents=retrieved_documents,
                 guardrail_result=guardrail_result,
                 profile=profile,
+                usage=usage,
             )
             if judged is not None:
                 return judged

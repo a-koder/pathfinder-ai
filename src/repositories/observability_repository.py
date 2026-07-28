@@ -18,8 +18,9 @@ class ObservabilityRepository:
                 prompt_tokens, completion_tokens, estimated_cost_usd, latency_ms,
                 retrieved_doc_count, guardrail_flags, eval_score, error,
                 student_name, user_message, guardrail_risk_level, quality_badge,
-                evaluation_scores, prompt_versions, input_guardrail_flags, revision_attempted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                evaluation_scores, prompt_versions, input_guardrail_flags, revision_attempted,
+                token_usage_by_model
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event.get("student_id"),
@@ -44,6 +45,7 @@ class ObservabilityRepository:
                 json.dumps(event.get("prompt_versions", {}) or {}),
                 json.dumps(event.get("input_guardrail_flags", []) or []),
                 1 if event.get("revision_attempted") else 0,
+                json.dumps(event.get("token_usage_by_model", {}) or {}),
             ),
         )
 
@@ -113,6 +115,10 @@ class ObservabilityRepository:
             parsed["input_guardrail_flags"] = json.loads(parsed.get("input_guardrail_flags") or "[]")
         except (TypeError, ValueError):
             parsed["input_guardrail_flags"] = []
+        try:
+            parsed["token_usage_by_model"] = json.loads(parsed.get("token_usage_by_model") or "{}")
+        except (TypeError, ValueError):
+            parsed["token_usage_by_model"] = {}
 
         helpful = parsed.get("helpful")
         parsed["helpful"] = bool(helpful) if helpful is not None else None

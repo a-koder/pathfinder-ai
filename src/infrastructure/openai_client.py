@@ -20,13 +20,22 @@ class OpenAIClient:
         model: str,
         messages: list[dict],
         response_format: dict | None = None,
-    ) -> str:
+    ) -> tuple[str, int, int]:
+        """Returns (text, prompt_tokens, completion_tokens) - the only place that reads
+        response.usage, so every caller gets real token counts instead of discarding them."""
         kwargs = {"model": model, "messages": messages}
         if response_format is not None:
             kwargs["response_format"] = response_format
         response = self._client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content or ""
+        text = response.choices[0].message.content or ""
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        return text, prompt_tokens, completion_tokens
 
-    def embed(self, text: str, model: str = "text-embedding-3-small") -> list[float]:
+    def embed(self, text: str, model: str = "text-embedding-3-small") -> tuple[list[float], int]:
+        """Returns (vector, prompt_tokens) - embeddings have no completion tokens."""
         response = self._client.embeddings.create(input=text, model=model)
-        return response.data[0].embedding
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        return response.data[0].embedding, prompt_tokens

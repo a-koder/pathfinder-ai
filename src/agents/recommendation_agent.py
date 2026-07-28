@@ -2,6 +2,7 @@ import config
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 from services.prompt_loader import load_prompt
+from services.usage_tracker import UsageTracker
 
 _RECOMMENDATION_FIELDS = [
     "type",
@@ -47,6 +48,7 @@ class RecommendationAgent:
         user_message: str,
         profile: dict,
         retrieved_context: dict,
+        usage: UsageTracker | None = None,
     ) -> dict:
         """Runs GPT-4o-mini over the retrieved context and returns a RecommendationOutput-shaped dict."""
         retrieved_documents = retrieved_context.get("retrieved_documents", [])
@@ -58,7 +60,7 @@ class RecommendationAgent:
             "Generate 3 to 5 grounded recommendations following the system instructions."
         )
 
-        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt)
+        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
         parsed = self._validate(raw)
         if parsed is not None:
             return parsed
