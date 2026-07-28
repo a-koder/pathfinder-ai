@@ -19,7 +19,7 @@ class MessageRepository:
     def get_recent_messages(self, student_id: int, limit: int = 20) -> list[dict]:
         """Return the most recent messages in chronological order (oldest first)."""
         rows = self._db.execute(
-            "SELECT role, content FROM messages "
+            "SELECT role, content, timestamp FROM messages "
             "WHERE student_id = ? "
             "ORDER BY message_id DESC LIMIT ?",
             (student_id, limit),

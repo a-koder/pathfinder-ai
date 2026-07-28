@@ -73,17 +73,17 @@ _REVISION_NEEDED_NOTE = (
 
 
 def _apply_guardrail_note(response_text: str, guardrail: dict) -> str:
-    """Appends a safe note (high risk) or limitations note (medium risk) to the response."""
-    risk_level = guardrail.get("risk_level", "low")
-
-    if risk_level == "high":
+    """
+    Appends the fixed safety note to the stored response text when risk is high - that's
+    a real safety consideration, important enough to persist even in restored/stored
+    history. Medium-risk "keep in mind" nudges (e.g. "share your GPA") are deliberately
+    NOT baked in here - they're rendered live-only by the UI (see chat.py's
+    _render_notes), deduped per session so a recurring flag doesn't repeat verbatim on
+    every single turn. guardrail_required_revisions is still returned on every turn's
+    result for the UI to use; this function just controls what gets permanently stored.
+    """
+    if guardrail.get("risk_level", "low") == "high":
         return f"{response_text}\n\n_{_HIGH_RISK_SAFE_NOTE}_"
-
-    if risk_level == "medium":
-        revisions = guardrail.get("required_revisions", [])
-        if revisions:
-            return f"{response_text}\n\n_Keep in mind: {' '.join(revisions)}_"
-
     return response_text
 
 
@@ -224,6 +224,35 @@ def submit_feedback(log_id: int, helpful: bool, feedback_text: str | None = None
         _observability_repo.save_feedback(log_id, helpful, feedback_text)
     except Exception:
         pass
+
+
+def load_history(student_name: str) -> list[dict]:
+    """
+    Returns this student's recent stored messages ({role, content, timestamp}, oldest
+    first) so the UI can repopulate the chat window on a return visit - the AI already
+    silently recalls this via memory.load_memory() every turn, this just makes the same
+    stored history visible. Swallows failures, returning an empty list rather than
+    breaking the page.
+    """
+    try:
+        memory = _memory.load_memory(student_name)
+        return memory.get("recent_messages", [])
+    except Exception:
+        return []
+
+
+def get_profile_snapshot(student_name: str) -> dict:
+    """
+    Returns a lightweight snapshot of what PathFinder already knows about this student
+    (interests, GPA, grade level, favorite careers) - lets the UI show a live "what we
+    know about you" summary instead of a static, generic sidebar. Swallows failures,
+    returning {} rather than breaking the page.
+    """
+    try:
+        memory = _memory.load_memory(student_name)
+        return memory.get("profile", {})
+    except Exception:
+        return {}
 
 
 def run_turn(student_name: str, user_message: str) -> dict:

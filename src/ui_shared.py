@@ -1,7 +1,16 @@
-"""Small UI building blocks shared across pages - header and sidebar footer branding.
-Presentation only; no business logic, no imports from agents/services/infrastructure.
+"""Small UI building blocks shared across pages - header, sidebar, and the doc/diagram
+viewer used by both the Architecture and Technology pages. Presentation only; no
+business logic, no imports from agents/services/infrastructure.
 """
+import re
+import subprocess
+from pathlib import Path
+
 import streamlit as st
+
+_DOCS_DIR = Path(__file__).parent.parent / "docs"
+_REPO_ROOT = Path(__file__).parent.parent
+_MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)```", re.DOTALL)
 
 _GITHUB_URL = "https://github.com/a-koder/pathfinder-ai"
 _LINKEDIN_URL = "https://www.linkedin.com/in/a-kabra/"
@@ -18,46 +27,164 @@ _LINKEDIN_SVG = """
 </svg>
 """
 
-_FOOTER_CSS = """
+_LINK_CSS = """
 <style>
-.pf-footer-links { display: flex; gap: 0.5rem; margin: 0.35rem 0 0.6rem 0; }
-.pf-footer-link {
+.pf-links { display: flex; gap: 0.5rem; margin: 0.35rem 0 0.4rem 0; flex-wrap: wrap; }
+.pf-link {
     display: inline-flex; align-items: center; gap: 0.35rem;
     padding: 0.3rem 0.7rem; border-radius: 999px;
     border: 1px solid rgba(128,128,128,0.35);
     text-decoration: none !important; font-weight: 500; font-size: 0.78rem;
     color: inherit; transition: border-color 0.15s ease, background 0.15s ease;
 }
-.pf-footer-link:hover { border-color: currentColor; background: rgba(128,128,128,0.08); }
+.pf-link:hover { border-color: currentColor; background: rgba(128,128,128,0.08); }
 </style>
 """
 
 
-def render_header() -> None:
-    """App identity header shown once at the top of each page's main content."""
-    st.markdown("# 🚀 PathFinder AI")
-    st.caption("Explore Possibilities. Discover Your Path.")
-
-
-def render_sidebar_footer() -> None:
-    """
-    Low-key page links + creator credit, links, and version - pinned at the bottom of
-    the sidebar. Career Guidance is the product; How PathFinder Works exists for
-    reviewers and recruiters, so neither gets a prominent top-level nav bar - both are
-    just quietly reachable down here, same as the "Created by" credit below them.
-    """
-    st.divider()
-    st.page_link("app_pages/chat.py", label="Career Guidance", icon=":material/chat:")
-    st.page_link("app_pages/how_it_works.py", label="How PathFinder Works", icon=":material/menu_book:")
-    st.divider()
-    st.caption("Created by")
-    st.markdown("**Anurag Kabra**")
+def render_social_links() -> None:
+    """GitHub + LinkedIn pill links. Used in both the sidebar and the About page."""
     st.markdown(
-        _FOOTER_CSS
-        + '<div class="pf-footer-links">'
-        + f'<a class="pf-footer-link" href="{_GITHUB_URL}" target="_blank" rel="noopener noreferrer">{_GITHUB_SVG}GitHub</a>'
-        + f'<a class="pf-footer-link" href="{_LINKEDIN_URL}" target="_blank" rel="noopener noreferrer">{_LINKEDIN_SVG}LinkedIn</a>'
+        _LINK_CSS
+        + '<div class="pf-links">'
+        + f'<a class="pf-link" href="{_GITHUB_URL}" target="_blank" rel="noopener noreferrer">{_GITHUB_SVG}GitHub</a>'
+        + f'<a class="pf-link" href="{_LINKEDIN_URL}" target="_blank" rel="noopener noreferrer">{_LINKEDIN_SVG}LinkedIn</a>'
         + "</div>",
         unsafe_allow_html=True,
     )
-    st.caption("Version 1.0")
+
+
+def render_header() -> None:
+    """Compact app identity header - visible but not dominant, shown once per page."""
+    st.markdown("### 🚀 PathFinder AI")
+    st.caption("Explore Possibilities • Discover Your Path")
+
+
+def _reset_conversation() -> None:
+    st.session_state.messages = []
+    st.session_state.notes_shown = set()
+    name = st.session_state.get("student_name", "").strip()
+    st.session_state.history_loaded_for = name or None
+
+
+def _get_version() -> str:
+    """Latest git tag (e.g. "v1.0.0"), read once at import time. Falls back to a static
+    default if git isn't available - e.g. a packaged deployment without a .git folder."""
+    try:
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        tag = result.stdout.strip()
+        if result.returncode == 0 and tag:
+            return tag.lstrip("vV")
+    except Exception:
+        pass
+    return "1.0"
+
+
+_VERSION = _get_version()
+
+
+def _render_profile_card(student_name: str, profile: dict) -> None:
+    """Live 'what PathFinder knows about you' snapshot - the sidebar's actual reason to
+    exist, not just branding. Updates every rerun as the profile grows."""
+    with st.container(border=True):
+        if not student_name:
+            st.markdown(":material/waving_hand: **Welcome!**")
+            st.caption("Enter your name above to get personalized guidance.")
+            return
+
+        st.markdown(f":material/waving_hand: **Welcome back, {student_name}**")
+
+        details = []
+        grade = profile.get("grade_level")
+        if grade:
+            details.append(f"Grade {grade}")
+        gpa = profile.get("gpa")
+        if gpa not in (None, ""):
+            details.append(f"GPA {gpa}")
+        if details:
+            st.caption(" · ".join(details))
+
+        interests = profile.get("interests") or []
+        if interests:
+            st.caption(":material/target: " + ", ".join(interests[:4]))
+        else:
+            st.caption("Still getting to know you — tell me what you're into!")
+
+
+def render_sidebar(student_name: str = "", profile: dict | None = None) -> None:
+    """
+    Global sidebar shown on every page: brand mark, a live profile snapshot (once a
+    name is entered), New Conversation, and creator credit at the bottom. Page
+    navigation, student name entry, and the full "About" story live in the top nav /
+    main content instead - this stays focused on quick context + one primary action.
+    """
+    st.caption(":material/rocket_launch: PathFinder AI")
+
+    _render_profile_card(student_name, profile or {})
+
+    st.button(
+        "New conversation",
+        icon=":material/add_comment:",
+        on_click=_reset_conversation,
+        width="stretch",
+    )
+
+    st.divider()
+    st.caption("Created by Anurag Kabra")
+    render_social_links()
+    st.caption(f"Version {_VERSION}")
+
+
+def load_doc(filename: str) -> str:
+    """
+    Reads a doc fresh on every call - deliberately not cached. These files are the
+    single source of truth for both this viewer and the rest of the repo; editing one
+    (there's exactly one copy) should show up on the very next page load.
+    """
+    return (_DOCS_DIR / filename).read_text(encoding="utf-8")
+
+
+def _split_mermaid_segments(markdown_text: str) -> list[tuple[str, str]]:
+    """Splits a markdown doc into ordered ('text', ...) / ('mermaid', ...) segments."""
+    segments = []
+    last_end = 0
+    for match in _MERMAID_FENCE.finditer(markdown_text):
+        if match.start() > last_end:
+            segments.append(("text", markdown_text[last_end:match.start()]))
+        segments.append(("mermaid", match.group(1).strip()))
+        last_end = match.end()
+    if last_end < len(markdown_text):
+        segments.append(("text", markdown_text[last_end:]))
+    return segments
+
+
+def render_doc_with_diagrams(filename: str) -> None:
+    """Renders a doc's markdown normally, but renders Mermaid fences as real diagrams
+    via Streamlit's native st.mermaid_chart - no CDN, no custom HTML/JS."""
+    segments = _split_mermaid_segments(load_doc(filename))
+    for kind, content in segments:
+        if kind == "mermaid":
+            st.mermaid_chart(content)
+        elif content.strip():
+            st.markdown(content)
+
+
+def render_doc_tabs(sections: list[tuple[str, str]]) -> None:
+    """Renders a list of (tab_label, doc_filename) pairs as tabs, one doc per tab,
+    with Mermaid diagrams (if any) rendered as real charts."""
+    tabs = st.tabs([label for label, _ in sections])
+    for tab, (label, filename) in zip(tabs, sections):
+        with tab:
+            try:
+                if filename == "08_Diagrams.md":
+                    render_doc_with_diagrams(filename)
+                else:
+                    st.markdown(load_doc(filename))
+            except FileNotFoundError:
+                st.warning(f"docs/{filename} could not be found.")

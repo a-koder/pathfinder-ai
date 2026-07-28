@@ -2,8 +2,8 @@ import datetime
 from pathlib import Path
 
 import streamlit as st
-from agents.orchestrator import run_turn, submit_feedback
-from ui_shared import render_header, render_sidebar_footer
+from agents.orchestrator import run_turn, submit_feedback, load_history
+from ui_shared import render_header
 
 
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
@@ -20,9 +20,37 @@ _TYPE_BADGES = {
     "college": ("College", "orange"),
 }
 
+# Tightens Streamlit's fairly generous built-in chat bubble chrome (padding/margins) so
+# messages take meaningfully less vertical space - the rest of the compaction (no divider
+# under the header, captions instead of full-size text) is done with plain layout choices.
+_COMPACT_CHAT_CSS = """
+<style>
+[data-testid="stChatMessage"] { padding: 0.35rem 0.1rem; gap: 0.5rem; }
+[data-testid="stChatMessageContent"] { padding-top: 0; padding-bottom: 0; }
+[data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
+    width: 2.1rem; height: 2.1rem;
+}
+</style>
+"""
+
 
 def _reset_conversation() -> None:
     st.session_state.messages = []
+    st.session_state.history_loaded_for = st.session_state.student_name.strip() or None
+
+
+def _parse_timestamp(value) -> datetime.datetime | None:
+    """Parses a stored UTC ISO timestamp back into a naive local datetime, matching the
+    naive-local datetimes used for messages created live in this session."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed
 
 
 def _format_timestamp(ts) -> str:
@@ -32,86 +60,89 @@ def _format_timestamp(ts) -> str:
 
 
 def _render_message_header(display_name: str, timestamp: str) -> None:
-    """Speaker name on the left, subtle timestamp on the right, thin rule below."""
-    name_col, time_col = st.columns([5, 1], vertical_alignment="bottom")
+    """Compact header: speaker name on the left, subtle timestamp on the right, message
+    content goes directly below - no divider, no extra vertical chrome."""
+    name_col, time_col = st.columns([5, 1], vertical_alignment="center")
     with name_col:
         st.markdown(f"**{display_name}**")
     with time_col:
         st.caption(timestamp)
-    st.divider()
 
 
 def _render_recommendations(recommendations: list[dict]) -> None:
-    """One clean 'Recommended paths' section - not a grid of separate cards per career."""
+    """Side-by-side comparison cards, one column per option, so a student can scan and
+    compare without scrolling through long stacked paragraphs."""
     if not recommendations:
         return
 
-    with st.container(border=True):
-        st.markdown("#### :material/route: Recommended paths")
+    st.markdown("##### Recommended Paths")
+    cols = st.columns(len(recommendations))
 
-        for i, rec in enumerate(recommendations):
-            if i > 0:
-                st.divider()
+    for col, rec in zip(cols, recommendations):
+        with col:
+            with st.container(border=True):
+                title = rec.get("title", "")
+                rec_type = (rec.get("type") or "").strip().lower()
+                badge_label, badge_color = _TYPE_BADGES.get(rec_type, (rec_type.title() or "Option", "gray"))
 
-            title = rec.get("title", "")
-            rec_type = (rec.get("type") or "").strip().lower()
-            badge_label, badge_color = _TYPE_BADGES.get(rec_type, (rec_type.title() or "Option", "gray"))
-
-            header_col, badge_col = st.columns([4, 1], vertical_alignment="center")
-            with header_col:
                 st.markdown(f"**{title}**")
-            with badge_col:
                 st.badge(badge_label, color=badge_color)
 
-            why_it_fits = rec.get("why_it_fits", "")
-            if why_it_fits:
-                st.markdown(f"- **Why it fits:** {why_it_fits}")
+                why_it_fits = rec.get("why_it_fits", "")
+                if why_it_fits:
+                    st.markdown("✅ **Why it fits**")
+                    st.caption(why_it_fits)
 
-            why_exciting = rec.get("why_exciting", "")
-            if why_exciting:
-                st.markdown(f"- **Why exciting:** {why_exciting}")
+                future_outlook = rec.get("future_outlook", "")
+                if future_outlook:
+                    st.markdown("📈 **Future outlook**")
+                    st.caption(future_outlook)
 
-            future_outlook = rec.get("future_outlook", "")
-            if future_outlook:
-                st.markdown(f"- **Future outlook:** {future_outlook}")
+                skills_to_build = rec.get("skills_to_build", [])
+                if skills_to_build:
+                    st.markdown("🛠 **Skills**")
+                    st.caption(", ".join(skills_to_build))
 
-            skills_to_build = rec.get("skills_to_build", [])
-            if skills_to_build:
-                st.markdown(f"- **Skills to build:** {', '.join(skills_to_build)}")
+                fun_facts = rec.get("fun_facts", [])
+                if fun_facts:
+                    st.markdown("✨ **Fun facts**")
+                    for fact in fun_facts[:3]:
+                        st.caption(f"• {fact}")
 
-            fun_facts = rec.get("fun_facts", [])
-            if fun_facts:
-                st.markdown("- **Fun facts:**")
-                for fact in fun_facts[:3]:
-                    st.markdown(f"  - {fact}")
+                why_exciting = rec.get("why_exciting", "")
+                opportunities = rec.get("opportunities", [])
+                real_world_impact = rec.get("real_world_impact", "")
+                related_majors = rec.get("related_majors", [])
+                adjacent_paths = rec.get("adjacent_paths", [])
+                next_steps = rec.get("next_steps", [])
+                risks = rec.get("risks_or_limitations", [])
 
-            opportunities = rec.get("opportunities", [])
-            real_world_impact = rec.get("real_world_impact", "")
-            related_majors = rec.get("related_majors", [])
-            adjacent_paths = rec.get("adjacent_paths", [])
-            next_steps = rec.get("next_steps", [])
-            risks = rec.get("risks_or_limitations", [])
-
-            if any([opportunities, real_world_impact, related_majors, adjacent_paths, next_steps, risks]):
-                with st.expander(f"More about {title}", icon=":material/info:"):
-                    if next_steps:
-                        st.markdown("**Next steps**")
-                        for step in next_steps[:3]:
-                            st.markdown(f"- {step}")
-                    if opportunities:
-                        st.markdown("**Opportunities**")
-                        for item in opportunities:
-                            st.markdown(f"- {item}")
-                    if real_world_impact:
-                        st.markdown(f"**Real-world impact:** {real_world_impact}")
-                    if related_majors:
-                        st.markdown(f"**Related majors:** {', '.join(related_majors)}")
-                    if adjacent_paths:
-                        st.markdown(f"**Adjacent paths:** {', '.join(adjacent_paths)}")
-                    if risks:
-                        st.markdown("**Honest limitations**")
-                        for item in risks:
-                            st.markdown(f"- {item}")
+                has_more = any([
+                    why_exciting, opportunities, real_world_impact,
+                    related_majors, adjacent_paths, next_steps, risks,
+                ])
+                if has_more:
+                    with st.expander("More Details", icon=":material/expand_more:"):
+                        if why_exciting:
+                            st.markdown(f"**Why exciting:** {why_exciting}")
+                        if next_steps:
+                            st.markdown("**Next steps**")
+                            for step in next_steps[:3]:
+                                st.markdown(f"- {step}")
+                        if opportunities:
+                            st.markdown("**Opportunities**")
+                            for item in opportunities:
+                                st.markdown(f"- {item}")
+                        if real_world_impact:
+                            st.markdown(f"**Real-world impact:** {real_world_impact}")
+                        if related_majors:
+                            st.markdown(f"**Related majors:** {', '.join(related_majors)}")
+                        if adjacent_paths:
+                            st.markdown(f"**Adjacent paths:** {', '.join(adjacent_paths)}")
+                        if risks:
+                            st.markdown("**Honest limitations**")
+                            for item in risks:
+                                st.markdown(f"- {item}")
 
 
 def _render_roadmap(path_plan: dict) -> None:
@@ -119,17 +150,17 @@ def _render_roadmap(path_plan: dict) -> None:
         return
 
     selected_path = path_plan.get("selected_path", "")
-    heading = ":material/map: Your roadmap"
+    heading = ":material/map: Your Roadmap"
     if selected_path:
         heading += f" — {selected_path}"
-    st.markdown(f"#### {heading}")
+    st.markdown(f"##### {heading}")
 
     short_term = path_plan.get("short_term_steps", [])
     medium_term = path_plan.get("medium_term_steps", [])
     long_term = path_plan.get("long_term_steps", [])
 
     if short_term or medium_term or long_term:
-        tab_short, tab_medium, tab_long = st.tabs(["Short term", "Medium term", "Long term"])
+        tab_short, tab_medium, tab_long = st.tabs(["Short Term", "Medium Term", "Long Term"])
         with tab_short:
             for step in short_term:
                 st.markdown(f"- {step}")
@@ -162,9 +193,17 @@ def _render_roadmap(path_plan: dict) -> None:
 
 
 def _render_notes(result: dict) -> None:
+    """
+    Renders guardrail/evaluation nudges live - deduped per session so a recurring flag
+    (e.g. "still no GPA on file") is shown once, not repeated verbatim on every turn.
+    High-risk safety notes are the exception: always shown, since that's a genuine
+    safety consideration each time, not a repeatable reminder.
+    """
     risk_level = result.get("guardrail_risk_level", "low")
     revisions = result.get("guardrail_required_revisions", [])
     requires_more_info = result.get("evaluation_requires_revision", False)
+
+    shown = st.session_state.setdefault("notes_shown", set())
 
     if risk_level == "high":
         st.warning(
@@ -173,13 +212,17 @@ def _render_notes(result: dict) -> None:
             icon=":material/shield:",
         )
     elif risk_level == "medium" and revisions:
-        st.caption(":material/info: Keep in mind: " + " ".join(revisions))
+        note_key = "guardrail:" + " ".join(revisions)
+        if note_key not in shown:
+            st.caption(":material/info: Keep in mind: " + " ".join(revisions))
+            shown.add(note_key)
 
-    if requires_more_info:
+    if requires_more_info and "needs_more_info" not in shown:
         st.caption(
             ":material/info: This guidance may need more information to be more precise. "
             "Sharing GPA, location, budget, or preferred learning style can improve the recommendation."
         )
+        shown.add("needs_more_info")
 
 
 def _render_feedback_buttons(log_id) -> None:
@@ -344,36 +387,56 @@ def _render_assistant_response(result: dict) -> None:
     _render_feedback_buttons(result.get("observability_log_id"))
 
     _render_trace_summary(result)
-    with st.expander("How PathFinder reached this answer", icon=":material/analytics:"):
+    with st.expander("Technical Details", icon=":material/analytics:"):
         _render_trace(result)
 
+
+st.html(_COMPACT_CHAT_CSS)
 
 # --- Session state ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "student_name" not in st.session_state:
     st.session_state.student_name = ""
+if "history_loaded_for" not in st.session_state:
+    st.session_state.history_loaded_for = None
 
-# --- Sidebar ---
-with st.sidebar:
+# --- Restore a returning student's past conversation, once per name. Skipped after an
+# explicit "New conversation" click, and re-triggered if the name changes. ---
+_current_name = st.session_state.student_name.strip()
+_restored_history = False
+if _current_name and st.session_state.history_loaded_for != _current_name:
+    st.session_state.messages = [
+        {
+            "role": msg["role"],
+            "content": msg["content"],
+            "timestamp": _parse_timestamp(msg.get("timestamp")),
+            "display_name": _current_name if msg["role"] == "user" else DISPLAY_NAMES["assistant"],
+        }
+        for msg in load_history(_current_name)
+    ]
+    st.session_state.history_loaded_for = _current_name
+    _restored_history = bool(st.session_state.messages)
+
+# --- Compact header + name entry ---
+header_col, name_col = st.columns([3, 1], vertical_alignment="bottom")
+with header_col:
+    render_header()
+with name_col:
     st.text_input(
         "Your name",
         key="student_name",
         placeholder="Enter your name to get started",
         icon=":material/person:",
+        label_visibility="collapsed",
     )
 
-    st.button(
-        "New conversation",
-        icon=":material/add_comment:",
-        on_click=_reset_conversation,
-        width="stretch",
+if _restored_history:
+    st.caption(
+        f":material/history: Welcome back, {_current_name} — restored your last "
+        f"{len(st.session_state.messages)} messages. Older replies show as plain text; "
+        "recommendation cards and roadmaps aren't re-rendered for past turns."
     )
-
-    render_sidebar_footer()
-
-# --- Main page ---
-render_header()
 
 if not st.session_state.messages:
     st.info(
