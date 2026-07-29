@@ -7,14 +7,14 @@ size: 16:9
 
 <!--
 HOW TO USE THIS FILE - this file is two things in one:
-1. A Marp slide deck (slides 1-12 below). Open it in VS Code with the free "Marp for VS
+1. A Marp slide deck (slides 1-13 below). Open it in VS Code with the free "Marp for VS
    Code" extension for a live preview, or render it with marp-cli:
    npx @marp-team/marp-cli docs/14_Presentation_Deck.md --pptx  (also supports --pdf, --html)
    It's still plain markdown underneath - edit it in any text editor.
-2. A reference appendix (after slide 12) with the storyboard, demo script, visual-asset
+2. A reference appendix (after slide 13) with the storyboard, demo script, visual-asset
    map, and a recommendation on cutting slides for time - clearly marked "Appendix - not
    for the 10-minute talk," meant to be skipped past when actually presenting.
-Grounded in the actual pathfinder-ai codebase as of 2026.07.02 - no invented features.
+Grounded in the actual pathfinder-ai codebase as of 2026.07.28 - no invented features.
 Screenshots referenced below are real, captured live and saved to docs/assets/deck/.
 -->
 
@@ -220,6 +220,33 @@ of these resonates with you" by naming one of the options, the roadmap is built 
 that specific choice — not just whichever option an internal priority order would have
 picked. That's the difference between a static recommender and something that actually
 listens.
+Transition: "Before the demo, here's the plain list of AI concepts all of that represents."
+-->
+
+---
+
+## AI Concepts, Named
+
+- **Multi-agent orchestration** — 10 agents, one central Orchestrator, no peer-to-peer agent calls
+- **RAG** (Retrieval-Augmented Generation) — Pinecone + OpenAI embeddings ground every claim
+- **Persistent memory** — SQLite profile + conversation history survive across sessions
+- **Guardrails** — rule-based input/output safety checks, every single turn
+- **Evaluation** — RASCEF, 6-dimension LLM-as-judge scoring, bounded auto-retry
+- **Observability & cost tracking** — per-call tokens, latency, real cost, all logged
+- **Prompt engineering & versioning** — prompts as versioned files, swappable via env var
+- **Structured outputs** — Pydantic-typed profile, retrieval metadata throughout
+
+*Not used (yet): peer-to-peer agent-to-agent messaging (e.g. an A2A protocol) — coordination is intentionally orchestrator-hub today. See "What's Next" for when that changes.*
+
+<!--
+Speaker notes (30-40s):
+Everything in the last five slides maps to a named pattern, so here's the checklist plainly:
+multi-agent orchestration, RAG, memory, guardrails, evaluation, observability, prompt
+versioning, structured outputs. One honest clarification since it's a common question —
+agents don't message each other directly. Everything is coordinated through one central
+Orchestrator, hub-and-spoke, not a peer-to-peer agent-to-agent protocol. That's deliberate,
+not a gap — I'd only add real A2A-style messaging if a genuine cross-system need for it
+showed up, which is covered on the roadmap slide later.
 Transition: "Let's stop talking about it and just show you."
 -->
 
@@ -266,20 +293,23 @@ Transition: "Which is a good bridge to what's actually next."
 # What's Next
 
 - **MCP-based integrations** — scholarships, colleges, and course providers as callable tools
-- **Real career market data** — labor-market sources (e.g. O*NET, BLS-style data)
-- **Real-time observability dashboard** — the data's already logged, just not visualized yet
-- **Richer human-in-the-loop workflows** — beyond a single 👍/👎 per turn
+- **Provider-agnostic LLM support** — compare OpenAI, Anthropic, etc. without touching agent code
+- **Deeper LangSmith usage** — dataset-based eval against golden scenarios, not just live tracing
+- **Agent-to-agent (A2A) interop** — only at a real cross-system boundary, if one shows up
 
-Full detail: `docs/19_Future_Vision.md`
+Full detail (plus career market data, an observability dashboard, and richer HITL): `docs/19_Future_Vision.md`
 
 <!--
 Speaker notes (25-35s):
 None of this is speculative technology — it's the next layer on top of what's already
 working. MCP is a natural fit since every external lookup PathFinder AI would need —
 scholarships, college data, course catalogs — is exactly the kind of tool-calling MCP is
-designed for. The observability dashboard is really just a visualization layer on data
-we're already capturing every turn. Full writeup is in the Future Vision doc. Thank you —
-happy to take questions.
+designed for. Provider-agnostic LLM support and deeper LangSmith usage are both service-layer
+extensions of things that already exist, not new architecture. And to be direct about
+agent-to-agent protocols like A2A: I'm deliberately not adding peer-to-peer agent messaging
+inside this system for its own sake — the orchestrator-hub model is intentional and stays
+unless a real cross-system need for it shows up. Full writeup is in the Future Vision doc.
+Thank you — happy to take questions.
 -->
 
 ---
@@ -306,9 +336,10 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation
 | 7 | Responsible AI, By Design | Address safety head-on | Guardrails run before *and* after generation, plus a self-correcting score |
 | 8 | Governed and Observed | Show operational maturity | Versioned prompts, real per-turn cost, full traceability |
 | 9 | What Makes It Feel Like a Counselor | Bring it back to the student experience | Memory and choice-aware roadmaps, not a static quiz |
-| 10 | Live Demo | Prove it, don't just claim it | Three real scenarios, live |
-| 11 | Where It Stands | Build trust with honest numbers | Tested, documented, and honest about the one known gap |
-| 12 | What's Next | End forward-looking, not defensive | Realistic next layer, not vague ambition |
+| 10 | AI Concepts, Named | Make the pattern checklist explicit for evaluators | Every pattern named plainly, including what's deliberately not there |
+| 11 | Live Demo | Prove it, don't just claim it | Three real scenarios, live |
+| 12 | Where It Stands | Build trust with honest numbers | Tested, documented, and honest about the one known gap |
+| 13 | What's Next | End forward-looking, not defensive | Realistic next layer, not vague ambition |
 
 ---
 
@@ -323,8 +354,9 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation
 | 7. Responsible AI | `docs/08_Diagrams.md` → Section 7, Guardrail and Evaluation Flow | `08_scenario2_guardrail_note_amber.jpg` |
 | 8. Prompt Governance + Observability | `docs/08_Diagrams.md` → Section 9, Prompt Governance Architecture | `06_rascef_evaluation_score.jpg` |
 | 9. Key Capabilities | `docs/08_Diagrams.md` → Section 6, Agent Responsibility Diagram (optional) | `09_scenario3_returning_student_memory.jpg` |
-| 10. Live Demo | — | `02_scenario1_recommendations.jpg` / `03_scenario1_roadmap_funfacts.jpg` (backup stills if live demo has trouble) |
-| 11. Results | `docs/12_DECISION_LOG.md` (point to it, don't screenshot it) | — |
+| 10. AI Concepts, Named | `docs/07_Capstone_Mapping_and_Implementation_Plan.md` § 13 (source table for this slide) | — |
+| 11. Live Demo | — | `02_scenario1_recommendations.jpg` / `03_scenario1_roadmap_funfacts.jpg` (backup stills if live demo has trouble) |
+| 12. Results | `docs/12_DECISION_LOG.md` (point to it, don't screenshot it) | — |
 
 All diagrams referenced above already exist in `docs/08_Diagrams.md` / `docs/04_Architecture.md` — reuse them directly (e.g. re-export the relevant Mermaid block to PNG) rather than redrawing anything.
 
@@ -359,12 +391,13 @@ Run Scenario 1 once, in advance, under a chosen name (e.g. "Morgan"), so that na
 
 ## Appendix D — Recommendation: What to Cut or Merge for 10 Minutes
 
-Rough timing at the pacing implied by the speaker notes above: ~7.5 minutes for slides 1–9 and 11–12, plus a live demo. A careful 3-scenario live demo (with real API latency) realistically needs 2.5–4 minutes, which puts the full 12-slide version at **10–11.5 minutes** — workable, but tight, and API latency on the day is the biggest wildcard.
+Rough timing at the pacing implied by the speaker notes above: ~8 minutes for slides 1–10 and 12–13, plus a live demo. A careful 3-scenario live demo (with real API latency) realistically needs 2.5–4 minutes, which puts the full 13-slide version at **10.5–12 minutes** — workable, but tight, and API latency on the day is the biggest wildcard.
 
 **If you need to cut something, in this order:**
 
 1. **Merge Slide 4 (Architecture) into Slide 5 (Agent Flow).** They're already telling one story at two zoom levels, and the "At a Glance" diagram (`10_architecture_at_a_glance.jpg`) already unifies both into one visual. Saves ~40–45 seconds with the least narrative loss of any cut available.
 2. **Cap the live demo at 2 scenarios, not 3.** Fold Scenario 3 into Scenario 1's natural conclusion — after showing the fresh discovery conversation, just reload and re-enter the same name to show instant recall, instead of treating it as a fully separate scripted scenario. Saves ~30–45 seconds.
-3. **Trim Slide 11 (Results) to its first two bullets only** (testing + RASCEF threshold), moving the decision-log count and the pytest-gap admission into the closing speaker notes as a spoken aside rather than an on-slide bullet.
+3. **Trim Slide 12 (Where It Stands) to its first two bullets only** (testing + RASCEF threshold), moving the decision-log count and the pytest-gap admission into the closing speaker notes as a spoken aside rather than an on-slide bullet.
+4. **Cut Slide 10 (AI Concepts, Named) entirely if still over time.** Its content is already implied across slides 4–9; it's a reinforcement aid for evaluators skimming a recording, not new information the live talk depends on.
 
 Applying just #1 and #2 comfortably brings the talk to ~9.5 minutes with room for the inevitable live-demo hiccup — recommended as the default plan rather than something to only fall back on if running long.
