@@ -7,14 +7,17 @@ size: 16:9
 
 <!--
 HOW TO USE THIS FILE - this file is two things in one:
-1. A Marp slide deck (slides 1-13 below). Open it in VS Code with the free "Marp for VS
+1. A Marp slide deck (slides 1-17 below). Open it in VS Code with the free "Marp for VS
    Code" extension for a live preview, or render it with marp-cli:
    npx @marp-team/marp-cli docs/14_Presentation_Deck.md --pptx  (also supports --pdf, --html)
    It's still plain markdown underneath - edit it in any text editor.
-2. A reference appendix (after slide 13) with the storyboard, demo script, visual-asset
+2. A reference appendix (after slide 17) with the storyboard, demo script, visual-asset
    map, and a recommendation on cutting slides for time - clearly marked "Appendix - not
    for the 10-minute talk," meant to be skipped past when actually presenting.
-Grounded in the actual pathfinder-ai codebase as of 2026.07.28 - no invented features.
+Slides 13-16 (Rubric Coverage -> Operationalization) are a rubric-evidence deep dive aimed
+at asynchronous grading, not stage time - Appendix D recommends skipping them live and
+covering that ground with slide 12 alone when the talk is timed to 10 minutes.
+Grounded in the actual pathfinder-ai codebase as of 2026.07.29 - no invented features.
 Screenshots referenced below are real, captured live and saved to docs/assets/deck/.
 -->
 
@@ -135,20 +138,25 @@ Transition: "None of this matters if the recommendations aren't grounded in some
 
 - **170 curated documents**: 54 careers, 44 majors, 27 colleges, 45 interest areas
 - Embedded with OpenAI (`text-embedding-3-small`), searched via **Pinecone**
-- Metadata-filtered by `doc_type` and `gpa_band` — one index, one namespace
+- **Metadata strategy**: `doc_type` + `gpa_band` filtering in one index, one namespace — no separate indexes to keep in sync
+- **Retrieval filtering**: top-k=5 by default, narrowed to a single `doc_type` when the question is type-specific (e.g. "what should I major in?")
+- **Grounding verification**: every recommendation carries an `evidence` field pointing at the retrieved document behind it — a guardrail flag fires if one has none
 - Falls back to local tag search if Pinecone is unreachable
 
 **Every recommendation traces to a real document — never invented.**
 
 <!--
-Speaker notes (35-45s):
+Speaker notes (50-60s):
 This is the RAG layer, and it's the difference between a career counselor and a career
 hallucinator. Every career, major, and college in this system comes from a curated
-dataset — not the model's training data. A student's message gets embedded and searched
-semantically against that dataset, filtered by document type, or by GPA band when we're
-talking about colleges. If Pinecone is ever unreachable, it degrades gracefully to a local
-tag-based search instead of failing outright. Nothing gets recommended that isn't backed
-by an actual document.
+dataset — not the model's training data — retrieved from Pinecone using OpenAI embeddings.
+Two things make this more than "just search everything": metadata strategy — one Pinecone
+index, one namespace, filtered by document type and GPA band instead of juggling separate
+indexes — and query-time retrieval filtering, so a major-specific question only searches
+major documents. And grounding isn't just claimed: every recommendation carries an evidence
+field pointing at the actual retrieved document, and a dedicated guardrail flag fires if one
+doesn't have it. If Pinecone is ever unreachable, it degrades gracefully to a local
+tag-based search instead of failing outright.
 Transition: "Grounding handles accuracy — now let's talk about safety."
 -->
 
@@ -183,20 +191,24 @@ observability come in."
 
 ## Governed and Observed
 
-- Every prompt is a **versioned file**, never hardcoded
-- Swap versions via one env var — no code change, instant rollback
+- Every prompt is a **versioned file**, never hardcoded — swap via one env var, instant rollback
 - Every turn logs latency, flags, score, and **real per-model cost**
-- Optional LangSmith tracing; 👍/👎 tied to the exact log row
+- **LangSmith tracing** (optional): auto-tags every evaluation trace with prompt versions, guardrail flags, and retry status — no per-call boilerplate
+- **Golden evaluation dataset**: 10 mock student profiles, 9 scripted scenarios (`docs/11`) — supports manual prompt tuning today, dataset-based automated eval is next
+- Versioned prompts + logged decisions + 👍/👎 feedback are the substrate the improvement loop runs on
 
 <!--
-Speaker notes (40-50s):
+Speaker notes (50-60s):
 Two things reviewers usually ask about: can you explain why a response changed, and what
 does this actually cost? Every prompt — discovery, recommendation, path planning, the
 RASCEF judge — lives in a versioned file, so a prompt edit is a new file, not an
-overwritten one, and it's fully rollback-able. And on the right, that's a real per-turn
-cost breakdown — not a placeholder. It sums actual token usage across every model called
-that turn, including a retry, broken down per model. Every turn also logs to SQLite, and a
-student's thumbs up or down links straight back to that exact log row.
+overwritten one, and it's fully rollback-able. On the right, that's a real per-turn cost
+breakdown, not a placeholder — it sums actual token usage across every model called that
+turn, including a retry, broken down per model. When LangSmith is enabled, every evaluation
+trace is auto-tagged with the exact prompt versions, guardrail flags, and retry status, with
+no extra code at each call site. There's also a 10-profile, 9-scenario golden evaluation
+dataset used for manual prompt tuning today — LangSmith dataset-based evaluation against
+those same scenarios is the natural next step, covered later in What's Next.
 Transition: "So what does that actually feel like for a student?"
 -->
 
@@ -285,7 +297,130 @@ APIs rather than mocks. Every architecture and product decision — 29 of them �
 with what alternative was considered and why it lost, which is what makes this auditable
 rather than "trust me." And I'll say the quiet part out loud: there's no automated pytest
 suite yet, verification today is manual-script-based. That's a real gap, not glossed over.
-Transition: "Which is a good bridge to what's actually next."
+Transition: "Let's go one level deeper, category by category, for anyone grading this
+against a rubric."
+-->
+
+---
+
+<!--
+Slides 13-16: rubric-evidence deep dive. Written for asynchronous grading, not stage time -
+see Appendix D for the recommended live-talk cut (skip straight from slide 12 to slide 17).
+-->
+
+## Rubric Coverage
+
+| Category | Implemented | Evidence |
+|---|---|---|
+| Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
+| RAG | ✅ | Pinecone + OpenAI embeddings, 170 docs, metadata filtering, tested local fallback |
+| Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails detect-only by design; 2 flags not yet reachable |
+| Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
+| Structured Outputs | ✅ | JSON contracts everywhere; reference Pydantic models exist, not yet runtime-enforced |
+| Observability | ✅ | Real per-model cost, full per-turn logging, optional LangSmith |
+| Operationalization | ⚠️ Partial | No CI / automated pytest suite; manual scripts only; no deployment story |
+| Improvement Loop | ⚠️ Partial | Per-turn auto-retry implemented + tested; cross-session prompt versioning exists, not yet exercised with a real v2 |
+
+<!--
+Speaker notes (50-60s):
+This is the honest version of "what does the rubric actually see," not a highlight reel.
+Five categories are fully green — multi-agent design, RAG, evaluation, structured outputs,
+and observability — each backed by real code and, for several, a live test run from earlier
+today. Three are marked partial, deliberately: guardrails, because input-side detection
+doesn't block anything and two output flags can't fire yet since the profile fields they
+depend on aren't populated; operationalization, because there's no CI or automated test
+gate; and the improvement loop, because the automatic per-turn retry is implemented and
+tested, but the cross-session prompt-versioning story hasn't been exercised with an actual
+second prompt version yet. Marking these partial instead of green is the point — it's more
+credible than claiming everything's finished.
+Transition: "Let's go one level deeper on evaluation specifically."
+-->
+
+---
+
+## Evaluation Framework
+
+**Method 1 — RASCEF (LLM-as-judge)**
+- GPT-4o scores 6 dimensions, 1-5 each: Relevance, Accuracy, Safety, Completeness, Explainability, Fairness
+- Pass threshold: **24/30** — badge: green (26-30), amber (21-25), red (0-20)
+- Instructed not to be generous — marks down unsafe/unsupported answers even if fluent
+
+**Method 2 — Rule-based validation (fallback)**
+- Runs when the judge call fails: scores from heuristics — grounding evidence present, guardrail risk level, next steps present
+- Capped at **amber** even on a perfect heuristic score — a degraded evaluation is never shown as fully judged
+
+**Sample results (live run, this review session):** 30, 28, 28, 27, 28, 29 (out of 30) — all green; one scenario flagged medium-risk for a missing GPA, then cleared automatically once GPA was shared
+
+<!--
+Speaker notes (55-60s):
+Two evaluation methods, not one. The primary path is RASCEF — six dimensions, scored 1 to 5
+by GPT-4o acting as a judge, out of 30, with a 24-point pass threshold and a badge computed
+deterministically in code, never trusted from the model's own opinion. The judge is
+explicitly instructed not to be generous — a fluent but unsafe or unsupported answer gets
+marked down on safety or accuracy specifically. If that judge call fails, a rule-based
+fallback scores the same six dimensions from heuristics — grounding evidence, guardrail
+risk, presence of next steps — and it's deliberately capped at amber even if its own score
+would be green, so a degraded evaluation is never mistaken for a fully-judged one. These
+aren't hypothetical numbers — a live acceptance run during this review scored 27 to 30 out
+of 30 across five scenarios, and correctly flagged a medium-risk guardrail on a college
+question with no GPA, then cleared that same flag automatically once GPA was shared.
+Transition: "So what happens when a score comes in low?"
+-->
+
+---
+
+## Continuous Improvement Loop
+
+**Automatic, per turn — implemented and tested:**
+
+Cycle 1 → RASCEF score < 24 → regenerate recommendation + path plan → Cycle 2 → re-score
+
+- Example (`test_revision_loop.py`, scripted): **18/30 → retry → 27/30** (pass)
+- Bounded to exactly one retry — a still-low case (10 → 15) is accepted and flagged, never looped indefinitely
+
+**Human-directed, across sessions — infrastructure exists, not yet exercised:**
+
+Versioned prompts (`v1` → `v2`) + Decision Log + 👍/👎 feedback → compare scores → ship the better version
+
+<!--
+Speaker notes (55-60s):
+There are two improvement loops here, and it matters to keep them separate. The first is
+automatic and already tested: if RASCEF scores a response below 24, the orchestrator
+regenerates the recommendation, path plan, and guardrail check once, then re-scores — a
+scripted test verifies this exactly, with an 18-out-of-30 first attempt improving to 27 on
+the retry, and a still-low case, 10 then 15, showing the loop stops after exactly one retry
+rather than looping indefinitely. The second loop is longer-cycle and human-directed:
+prompt versioning, the decision log, and per-turn feedback all exist specifically to support
+editing a prompt, bumping it to a v2 file, and comparing RASCEF scores before shipping it —
+but I want to be direct that this second loop hasn't actually been exercised with a real
+second prompt version yet. The infrastructure is real; the cycle itself is still
+theoretical.
+Transition: "None of this matters without knowing when it's actually ready to ship."
+-->
+
+---
+
+## Operationalization
+
+- **Success criteria**: RASCEF ≥ 24/30 per turn; 7/7 scripted acceptance scenarios passing (verified this session)
+- **Failure modes**: Pinecone unreachable → local fallback; malformed LLM JSON → safe per-agent fallback; judge call fails → rule-based eval (capped amber); logging failure → swallowed, never blocks the response
+- **Monitoring**: per-turn SQLite log (cost, latency, flags, score); optional LangSmith tracing; 👍/👎 tied to the exact log row
+- **Pre-release gates today**: 13 verification scripts, run manually — **no CI gate yet**, stated plainly rather than implied
+
+<!--
+Speaker notes (55-60s):
+Operationalization is where I'll be most direct about what's real versus aspirational.
+Success criteria are concrete: a 24-out-of-30 RASCEF threshold per turn, and 7 out of 7
+scripted acceptance scenarios passing, verified again during this very review. Failure
+modes are handled at each layer independently — Pinecone falls back to local search, a
+malformed model response falls back to a safe default per agent, a failed judge call falls
+back to rule-based scoring capped at amber, and a logging failure is swallowed rather than
+breaking the turn. Monitoring is real: every turn writes a full row to SQLite, with
+optional LangSmith tracing and feedback tied to the exact log row. Where this is genuinely
+weak: there are 13 verification scripts, but they're run by hand against live APIs — there's
+no CI pipeline gating a merge today. That's a real gap, not a rounding error, and it's the
+single highest-leverage thing to fix next.
+Transition: "Which is exactly what's coming next."
 -->
 
 ---
@@ -339,7 +474,11 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation
 | 10 | AI Concepts, Named | Make the pattern checklist explicit for evaluators | Every pattern named plainly, including what's deliberately not there |
 | 11 | Live Demo | Prove it, don't just claim it | Three real scenarios, live |
 | 12 | Where It Stands | Build trust with honest numbers | Tested, documented, and honest about the one known gap |
-| 13 | What's Next | End forward-looking, not defensive | Realistic next layer, not vague ambition |
+| 13 | Rubric Coverage | Map every category a grader would check against real evidence | 5 categories green, 3 marked partial on purpose |
+| 14 | Evaluation Framework | Show both scoring methods, thresholds, and real sample scores | RASCEF + rule-based fallback, neither one overstates itself |
+| 15 | Continuous Improvement Loop | Distinguish the automatic per-turn loop from the human-directed one | The automatic loop is tested; the versioned-prompt loop exists but is unexercised |
+| 16 | Operationalization | State success criteria, failure modes, and the CI gap plainly | Real monitoring, no CI gate yet — said directly |
+| 17 | What's Next | End forward-looking, not defensive | Realistic next layer, not vague ambition |
 
 ---
 
@@ -357,6 +496,10 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation
 | 10. AI Concepts, Named | `docs/07_Capstone_Mapping_and_Implementation_Plan.md` § 13 (source table for this slide) | — |
 | 11. Live Demo | — | `02_scenario1_recommendations.jpg` / `03_scenario1_roadmap_funfacts.jpg` (backup stills if live demo has trouble) |
 | 12. Results | `docs/12_DECISION_LOG.md` (point to it, don't screenshot it) | — |
+| 13. Rubric Coverage | `docs/25_Capstone_Review.md`'s rubric table (source for this slide) | — (data table, no image needed) |
+| 14. Evaluation Framework | — | — (data slide; sample scores are from this session's `test_full_workflow.py` run) |
+| 15. Continuous Improvement Loop | — | — (data slide; scores are from `test_revision_loop.py`'s scripted cases) |
+| 16. Operationalization | `docs/10_Error_Handling_and_Fallbacks.md` (failure modes table) | — (data slide, no image needed) |
 
 All diagrams referenced above already exist in `docs/08_Diagrams.md` / `docs/04_Architecture.md` — reuse them directly (e.g. re-export the relevant Mermaid block to PNG) rather than redrawing anything.
 
@@ -391,13 +534,14 @@ Run Scenario 1 once, in advance, under a chosen name (e.g. "Morgan"), so that na
 
 ## Appendix D — Recommendation: What to Cut or Merge for 10 Minutes
 
-Rough timing at the pacing implied by the speaker notes above: ~8 minutes for slides 1–10 and 12–13, plus a live demo. A careful 3-scenario live demo (with real API latency) realistically needs 2.5–4 minutes, which puts the full 13-slide version at **10.5–12 minutes** — workable, but tight, and API latency on the day is the biggest wildcard.
+Rough timing at the pacing implied by the speaker notes above: ~9 minutes for slides 1–12 and 17, plus a live demo, if slides 13–16 are skipped entirely (see recommendation #1 below — this is the recommended live-talk path). A careful 3-scenario live demo (with real API latency) realistically needs 2.5–4 minutes, which puts that path at **11.5–13 minutes** — workable, but tight. Presenting the full 17-slide deck (including slides 13–16 at ~55–60s each) adds roughly **4 more minutes**, pushing the full version to **~15.5–17 minutes** — appropriate for an extended defense/Q&A format, not a timed 10-minute talk.
 
 **If you need to cut something, in this order:**
 
-1. **Merge Slide 4 (Architecture) into Slide 5 (Agent Flow).** They're already telling one story at two zoom levels, and the "At a Glance" diagram (`10_architecture_at_a_glance.jpg`) already unifies both into one visual. Saves ~40–45 seconds with the least narrative loss of any cut available.
-2. **Cap the live demo at 2 scenarios, not 3.** Fold Scenario 3 into Scenario 1's natural conclusion — after showing the fresh discovery conversation, just reload and re-enter the same name to show instant recall, instead of treating it as a fully separate scripted scenario. Saves ~30–45 seconds.
-3. **Trim Slide 12 (Where It Stands) to its first two bullets only** (testing + RASCEF threshold), moving the decision-log count and the pytest-gap admission into the closing speaker notes as a spoken aside rather than an on-slide bullet.
-4. **Cut Slide 10 (AI Concepts, Named) entirely if still over time.** Its content is already implied across slides 4–9; it's a reinforcement aid for evaluators skimming a recording, not new information the live talk depends on.
+1. **Skip Slides 13–16 (Rubric Coverage → Operationalization) entirely in a timed 10-minute talk.** They're written for asynchronous rubric review, not stage time — Slide 12 (Where It Stands) already covers the honest-numbers beat in one slide for a live audience, and the full detail lives in `docs/25_Capstone_Review.md` for anyone grading afterward. Jump straight from Slide 12 to Slide 17 (What's Next). Saves ~4 minutes — by far the largest single time recovery available, and the first thing to cut, not the last.
+2. **Merge Slide 4 (Architecture) into Slide 5 (Agent Flow).** They're already telling one story at two zoom levels, and the "At a Glance" diagram (`10_architecture_at_a_glance.jpg`) already unifies both into one visual. Saves ~40–45 seconds with the least narrative loss of any cut available.
+3. **Cap the live demo at 2 scenarios, not 3.** Fold Scenario 3 into Scenario 1's natural conclusion — after showing the fresh discovery conversation, just reload and re-enter the same name to show instant recall, instead of treating it as a fully separate scripted scenario. Saves ~30–45 seconds.
+4. **Trim Slide 12 (Where It Stands) to its first two bullets only** (testing + RASCEF threshold), moving the decision-log count and the pytest-gap admission into the closing speaker notes as a spoken aside rather than an on-slide bullet.
+5. **Cut Slide 10 (AI Concepts, Named) entirely if still over time.** Its content is already implied across slides 4–9; it's a reinforcement aid for evaluators skimming a recording, not new information the live talk depends on.
 
-Applying just #1 and #2 comfortably brings the talk to ~9.5 minutes with room for the inevitable live-demo hiccup — recommended as the default plan rather than something to only fall back on if running long.
+Applying just #1 (skip 13–16) comfortably brings a timed talk to ~11.5–13 minutes with the demo; adding #2 and #3 brings it to ~10–11.5 minutes — recommended as the default plan for any time-boxed presentation. Keep slides 13–16 in the file for anyone reading the deck directly rather than watching it presented.

@@ -309,3 +309,16 @@ pathfinder-ai/
 ├── .env.example
 └── README.md
 ```
+
+---
+
+## Documentation
+
+Full documentation index, organized by topic (problem statement, architecture, RAG, guardrails,
+evaluation, observability, roadmap, and more): **[`docs/README.md`](docs/README.md)**.
+
+Highlights: the capstone-to-code mapping and full pattern list live in
+[`docs/07_Capstone_Mapping_and_Implementation_Plan.md`](docs/07_Capstone_Mapping_and_Implementation_Plan.md);
+the presentation deck is [`docs/14_Presentation_Deck.md`](docs/14_Presentation_Deck.md); what's
+next beyond this MVP is [`docs/19_Future_Vision.md`](docs/19_Future_Vision.md); an honest
+strengths/weaknesses/gaps self-assessment is [`docs/25_Capstone_Review.md`](docs/25_Capstone_Review.md).

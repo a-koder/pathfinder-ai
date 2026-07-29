@@ -101,6 +101,23 @@ In tests, `LLMService` is replaced with a mock that returns a fixed response. No
 
 Full input/output contracts: `docs/09_Agent_Contracts.md`. Agents pass plain dicts matching those documented contracts — see the implementation note at the top of that document regarding `src/schemas/models.py`.
 
+### Agent Inventory — Purpose, Failure Handling, External Services
+
+At-a-glance version of what's fully detailed in `docs/09_Agent_Contracts.md`. "External services" means direct network/DB dependencies — always reached through the Service or Infrastructure layer, never imported directly by the agent.
+
+| Agent | Purpose | Key Inputs | Key Outputs | Failure Handling | External Services |
+|---|---|---|---|---|---|
+| Orchestrator | Runs the fixed per-turn pipeline; applies the one-retry critic/revision loop | `student_name`, `user_message` | Full turn result (response, recommendations, path plan, scores, trace) | Each stage degrades independently (no single global try/except); guardrail/evaluation notes appended rather than blocking; logging failures swallowed | None directly — delegates to every agent below |
+| Input Guardrail Agent | Pre-generation rule-based check (profanity / frustration / prompt-injection); detection only | `user_message` | `{flags, passed}` | Pure string/dict logic, no I/O — nothing to fail | None |
+| Memory Agent | Load, merge, and persist student profile + conversation history | `student_name`, profile updates, message content | Profile dict, `recent_messages`, `session_number` | SQLite unavailable → empty in-memory profile for that turn; saves become no-ops rather than raising | SQLite (via repositories) |
+| Discovery Agent | Extract profile fields from the latest message only; never invents GPA/grade | `student_name`, `user_message`, `existing_profile` | `student_profile_updates`, `confidence`, `missing_information`, `next_question` | Low-confidence/failed extraction → returns the existing profile unchanged plus a safe open-ended fallback question | OpenAI (`gpt-4o-mini` via `LLMService`) |
+| Retrieval Agent | Semantic search over the knowledge base | `user_message`, `profile`, `top_k` | `query`, `retrieved_documents`, `retrieval_confidence` | Pinecone unreachable → transparent fallback to local tag-match search over the same JSON files | OpenAI (embeddings), Pinecone |
+| Recommendation Agent | Generate 3–5 grounded career/major/college recommendations | `user_message`, `profile`, `retrieved_context` | `recommendations[]`, `summary`, `follow_up_question` | Invalid/unusable model JSON → safe fallback response built from retrieved document titles instead of crashing | OpenAI (`gpt-4o-mini`) |
+| Path Planning Agent | Turn one selected recommendation into a phased roadmap | `profile`, `recommendations`, `selected_override` | `selected_path`, `source`, short/medium/long-term steps, skills, projects | Unusable output or nothing to plan around → generic 3-step fallback roadmap | OpenAI (`gpt-4o-mini`) |
+| Guardrail Agent | Post-generation rule-based safety check (10 flags) | `response_payload`, `profile`, `user_message` | `passed`, `flags`, `risk_level`, `required_revisions` | Pure string/dict logic, no I/O — nothing to fail | None |
+| Evaluation Agent | RASCEF quality scoring — LLM-as-judge with a rule-based fallback | `user_message`, `response_payload`, `retrieved_context`, `profile`, `guardrail_result` | `scores`, `total_score`, `quality_badge`, `feedback`, `requires_revision` | Judge call fails → rule-based fallback (capped at `amber`); both fail → `not_evaluated` with zeroed scores, never a crash | OpenAI (`gpt-4o`); optional LangSmith trace |
+| Observability Agent | Persist one log row per turn, including real per-model cost | Event dict (models, token usage, flags, scores, latency) | `log_id` (or `None` on failure) | Write failure swallowed at both the agent and the orchestrator call site — never blocks the response | SQLite |
+
 ### Layer 3 — Services (`src/services/`)
 Services orchestrate infrastructure for agents. Each service wraps one or more infrastructure clients and exposes a clean, agent-friendly interface.
 
