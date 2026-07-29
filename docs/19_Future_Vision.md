@@ -14,6 +14,18 @@ For what's explicitly out of scope for the MVP today, see `docs/01_Vision.md`'s 
 
 **Next step:** Expose scholarship, college-data, and course-provider lookups (below) as MCP tools rather than one-off service integrations. MCP's client-server tool-calling model fits this codebase's existing dependency-injection pattern almost directly — an `MCPToolService` would sit in the same service layer as `RetrievalService` today, and agents would call it the same way they call any other service, without knowing or caring which MCP server is behind a given tool. This also means new external data sources could be added by connecting a new MCP server, not by writing a new bespoke integration each time.
 
+## Agent-to-Agent (A2A) Interop
+
+**Today:** All 10 agents coordinate exclusively through the central `Orchestrator` (`docs/07_Capstone_Mapping_and_Implementation_Plan.md` §3) — no agent calls another agent directly, and there is no cross-process or cross-organization agent messaging. This is a deliberate hub-and-spoke design, not a gap: it keeps every interaction centrally traceable in `observability_logs`.
+
+**Next step:** Adopt a real agent-to-agent interop mechanism (e.g. Google's A2A protocol — agent cards, task discovery, JSON-RPC handoffs) only at a genuine cross-system boundary, if one shows up — for example, a school's own counselor-bot handing a student off to PathFinder AI directly, or PathFinder calling an external district system's agent. This is **not** planned as an internal refactor of the existing 10 in-process agents: replacing orchestrator-hub coordination with peer-to-peer messaging inside a single application would reduce traceability for no functional gain. Pursue this only if and when an actual external agent needs to talk to PathFinder AI.
+
+## Provider-Agnostic LLM Support
+
+**Today:** `LLMService` (`src/services/llm_service.py`) wraps a single `OpenAIClient`; every agent depends on the same injected `LLMService`, and OpenAI is the only supported model provider.
+
+**Next step:** Introduce a provider interface behind `LLMService` (an abstract `generate_text`/`generate_json` contract), with e.g. an `AnthropicClient` alongside `OpenAIClient`, selected by config. Since agents already depend only on the `LLMService` abstraction and never import a specific SDK (`docs/07` Phase 6 design note), this is a service-layer change, not an agent-layer one — and it would enable real cost/quality comparisons per model tier (e.g. a different model for RASCEF evaluation vs. generation) without touching agent code.
+
 ## Scholarship APIs
 
 **Today:** Explicitly out of scope for the MVP (`docs/01_Vision.md`) — PathFinder AI has no scholarship data or matching logic at all.
@@ -49,6 +61,12 @@ For what's explicitly out of scope for the MVP today, see `docs/01_Vision.md`'s 
 **Today:** Observability data is queryable only via direct SQLite access or the manual `src/scripts/test_observability.py` script; there is no visualization layer, and LangSmith tracing (when enabled) is the only place data is viewed outside the raw table.
 
 **Next step:** A live dashboard (a new Streamlit page reading from `ObservabilityRepository`, or a proper BI tool pointed at `data/memory.db`) surfacing the same fields already logged: quality-badge distribution, guardrail-flag rates, latency percentiles, and running cost. Since every field this would need is already captured per turn, this is purely a visualization project, not a data-collection one.
+
+## Deeper LangSmith Usage
+
+**Today:** `tracing_service.py` sends one LangSmith run per traced event when `LANGSMITH_TRACING` is enabled (`config.has_langsmith_key()`) — this is visibility only: live traces in the LangSmith UI, no dataset-backed evaluation and no dashboards beyond what LangSmith renders by default.
+
+**Next step:** Use LangSmith's dataset/evaluation features to run the golden scenarios (`docs/11_Test_Scenarios_and_Golden_Dataset.md`) as a repeatable eval suite whenever a prompt version changes, catching regressions before a new prompt file is promoted. This reuses tracing that already exists — no new instrumentation — and complements the custom observability dashboard above rather than duplicating it.
 
 ## More Sophisticated HITL Workflows
 
