@@ -104,7 +104,7 @@ Instead: *"I built PathFinder AI — a career discovery and college pathway guid
 | AI Engineering Pattern | PathFinder AI Evidence |
 |---|---|
 | Multi-agent orchestration | 10 agents coordinated by a central orchestrator, with concurrency where it's safe (Discovery ‖ Retrieval) |
-| RAG with vector search | Pinecone indexes 170 curated documents across careers, majors, colleges, and interests |
+| RAG with vector search | Pinecone indexes 223 curated documents across careers, majors, colleges, and interests |
 | Semantic retrieval | OpenAI `text-embedding-3-small` enables interest-based matching beyond keyword search |
 | Persistent memory | SQLite stores an evolving student profile and full conversation history across sessions |
 | Guardrails | Input-side detection plus post-generation rule checks that actually change what the student sees |

@@ -295,5 +295,203 @@
     "pathway_notes": "Highly specialized public STEM university with exceptional job placement rates and salaries — engineering graduates average among the highest starting salaries of any public university. Located near Denver, with access to energy, aerospace, and defense employers. Small, focused campus culture where STEM is the primary identity. Outdoor recreation access is exceptional given Colorado location.",
     "affordability_notes": "Competitive in-state tuition (~$19K/year). Financial aid available. High starting salaries after graduation make ROI excellent — median early-career salary for graduates is among the highest of any public university.",
     "fit_tags": ["engineering focus", "energy sector", "Colorado outdoors", "strong starting salaries", "small campus", "STEM-only culture"]
+  },
+  {
+    "id": "college_ut_austin",
+    "name": "University of Texas at Austin",
+    "location": "Austin, TX",
+    "college_type": "Public Research University",
+    "sample_programs": ["Computer Science", "Business (McCombs)", "Engineering", "Communications", "Biology (pre-med)"],
+    "gpa_band": "target",
+    "pathway_notes": "Flagship of the University of Texas system and one of the largest research universities in the country. Computer science and business programs are nationally elite. Austin's booming tech scene (Tesla, Apple, Oracle, a growing startup ecosystem) puts internships and full-time offers within walking distance of campus. Top 6% automatic admission rule guarantees a spot for the highest-ranked Texas high school graduates.",
+    "affordability_notes": "In-state tuition around $11K-$13K/year. Out-of-state is roughly $40K. Texas's automatic-admission rule and strong institutional aid make this an exceptional value for Texas residents specifically.",
+    "fit_tags": ["large public flagship", "tech industry access", "Texas residents preferred", "business and CS strength", "Austin location"]
+  },
+  {
+    "id": "college_texas_am",
+    "name": "Texas A&M University",
+    "location": "College Station, TX",
+    "college_type": "Public Research University",
+    "sample_programs": ["Engineering", "Agriculture Science", "Business", "Veterinary Medicine (pre-vet)", "Petroleum Engineering"],
+    "gpa_band": "target",
+    "pathway_notes": "One of the largest universities in the US with an unusually strong sense of school spirit and tradition (the Corps of Cadets, Aggie Ring, Twelfth Man). Engineering and agriculture programs are among the best in the country. Extensive corporate recruiting pipeline in energy, engineering, and agribusiness across Texas and beyond.",
+    "affordability_notes": "In-state tuition around $12K-$14K/year. Out-of-state roughly $38K. Strong merit scholarships for high-achieving students; land-grant mission keeps costs relatively controlled for Texans.",
+    "fit_tags": ["engineering and agriculture", "large school spirit culture", "Texas residents preferred", "corps of cadets tradition", "great value"]
+  },
+  {
+    "id": "college_michigan",
+    "name": "University of Michigan",
+    "location": "Ann Arbor, MI",
+    "college_type": "Public Research University",
+    "sample_programs": ["Computer Science", "Business (Ross)", "Engineering", "Psychology", "Public Policy"],
+    "gpa_band": "reach",
+    "pathway_notes": "A Public Ivy with elite programs across nearly every field — business, engineering, and computer science are all top-10 nationally ranked among publics. Massive, passionate athletics and alumni culture (100,000+ seat stadium). Deep corporate recruiting pipeline into consulting, finance, and tech. Admissions are competitive for both in-state and out-of-state applicants.",
+    "affordability_notes": "In-state tuition around $17K/year; out-of-state is roughly $57K, among the highest of any public university. Need-based aid (the Go Blue Guarantee) covers full tuition for in-state families earning under $75K.",
+    "fit_tags": ["Public Ivy", "elite public university", "school spirit and athletics", "Michigan residents preferred", "strong across every field"]
+  },
+  {
+    "id": "college_wisconsin_madison",
+    "name": "University of Wisconsin–Madison",
+    "location": "Madison, WI",
+    "college_type": "Public Research University",
+    "sample_programs": ["Engineering", "Computer Science", "Life Sciences", "Journalism", "Business (Wisconsin BBA)"],
+    "gpa_band": "target",
+    "pathway_notes": "A top public research university with one of the largest research budgets in the country, giving undergraduates real access to lab and research opportunities. Madison is consistently rated one of the best college towns in the US. Strong programs in life sciences, engineering, and journalism, with an active, politically engaged campus culture.",
+    "affordability_notes": "In-state tuition around $11K/year; out-of-state roughly $40K. Bucky's Tuition Promise covers tuition and fees for in-state students from families earning under $65K.",
+    "fit_tags": ["research-intensive public", "great college town", "life sciences", "Wisconsin residents preferred", "engaged campus culture"]
+  },
+  {
+    "id": "college_ohio_state",
+    "name": "The Ohio State University",
+    "location": "Columbus, OH",
+    "college_type": "Public Research University",
+    "sample_programs": ["Engineering", "Business (Fisher)", "Agriculture Science", "Communications", "Data Analytics"],
+    "gpa_band": "likely",
+    "pathway_notes": "One of the largest universities in the country, with a correspondingly enormous range of majors, clubs, and research centers — if a niche interest exists, Ohio State likely has a program or club for it. Columbus's growing tech and insurance/finance sector (Intel's new chip plant nearby) is creating a fast-expanding local job market. Big Ten athletics culture is central to campus identity.",
+    "affordability_notes": "In-state tuition around $12K/year; out-of-state roughly $37K. Ohio's land-grant mission and sizeable merit scholarship pool make it a strong value for Ohio residents.",
+    "fit_tags": ["very large public university", "broad program selection", "Big Ten athletics", "Ohio residents preferred", "growing local tech sector"]
+  },
+  {
+    "id": "college_washington",
+    "name": "University of Washington",
+    "location": "Seattle, WA",
+    "college_type": "Public Research University",
+    "sample_programs": ["Computer Science (Allen School)", "Informatics", "Bioengineering", "Business (Foster)", "Environmental Science"],
+    "gpa_band": "target",
+    "pathway_notes": "The Allen School of Computer Science is one of the most competitive and respected programs in the country, feeding directly into Seattle's Amazon/Microsoft/startup ecosystem. Strong bioengineering and public health programs given proximity to Fred Hutch and major hospital systems. Pacific Northwest location and outdoor access are a major draw.",
+    "affordability_notes": "In-state tuition around $12K/year; out-of-state roughly $40K. Husky Promise covers full tuition for Washington residents from lower-income families.",
+    "fit_tags": ["tech industry access", "Pacific Northwest", "computer science strength", "Washington residents preferred", "bioengineering and public health"]
+  },
+  {
+    "id": "college_florida",
+    "name": "University of Florida",
+    "location": "Gainesville, FL",
+    "college_type": "Public Research University",
+    "sample_programs": ["Business", "Engineering", "Journalism & Communications", "Biology (pre-med)", "Agriculture Science"],
+    "gpa_band": "target",
+    "pathway_notes": "A top-5 public university nationally with an unusually broad set of strong programs — business, engineering, journalism, and pre-health are all well-regarded. Florida's Bright Futures scholarship program combined with in-state tuition makes it one of the best-value large research universities in the country for Florida residents. Large Division I athletics culture.",
+    "affordability_notes": "In-state tuition (with Bright Futures) can be close to free for high-achieving Florida residents; sticker in-state tuition is around $6K/year. Out-of-state is roughly $28K-$31K.",
+    "fit_tags": ["exceptional value", "Florida residents preferred", "broad program strength", "large Division I athletics", "pre-health pipeline"]
+  },
+  {
+    "id": "college_uva",
+    "name": "University of Virginia",
+    "location": "Charlottesville, VA",
+    "college_type": "Public Research University",
+    "sample_programs": ["Commerce (McIntire)", "Computer Science", "Politics", "English", "Biology (pre-med)"],
+    "gpa_band": "reach",
+    "pathway_notes": "One of the original Public Ivy institutions, founded by Thomas Jefferson, with an unusually strong undergraduate business program (McIntire) and liberal arts core. Honor code and student self-governance culture is central to campus identity. Strong pre-law and pre-med placement given proximity to DC and UVA's own medical center.",
+    "affordability_notes": "In-state tuition around $20K/year; out-of-state roughly $58K. AccessUVA guarantees no-loan aid packages for in-state students with significant financial need.",
+    "fit_tags": ["Public Ivy", "honor code culture", "business and liberal arts", "Virginia residents preferred", "historic campus"]
+  },
+  {
+    "id": "college_minnesota",
+    "name": "University of Minnesota Twin Cities",
+    "location": "Minneapolis, MN",
+    "college_type": "Public Research University",
+    "sample_programs": ["Computer Science", "Business (Carlson)", "Biology", "Journalism", "Chemical Engineering"],
+    "gpa_band": "likely",
+    "pathway_notes": "A large, research-intensive public university located directly in a major metro area, giving students easy access to a diverse corporate base (Target, Best Buy, 3M, UnitedHealth Group all headquartered nearby) for internships and recruiting. Strong programs across STEM, business, and journalism. Twin Cities offer a much bigger-city experience than most public flagships.",
+    "affordability_notes": "In-state tuition around $15K/year; out-of-state roughly $34K. Minnesota's reciprocity agreements with neighboring states (Wisconsin, North/South Dakota) lower cost for regional students too.",
+    "fit_tags": ["big-city public flagship", "corporate recruiting access", "Minnesota residents preferred", "STEM and business", "regional tuition reciprocity"]
+  },
+  {
+    "id": "college_arizona",
+    "name": "University of Arizona",
+    "location": "Tucson, AZ",
+    "college_type": "Public Research University",
+    "sample_programs": ["Optical Sciences", "Astronomy", "Business", "Environmental Science", "Mining Engineering"],
+    "gpa_band": "likely",
+    "pathway_notes": "One of the top public universities for space and planetary sciences — UArizona scientists led NASA's OSIRIS-REx asteroid sample-return mission. Strong optical sciences program (rooted in Tucson's dark, clear desert skies, ideal for observatories). Broadly accessible admissions relative to peer public research universities, with strong scholarship support for qualified students.",
+    "affordability_notes": "In-state tuition around $13K/year; out-of-state roughly $37K. Wildcat Excellence and other merit scholarships are awarded automatically based on GPA/test scores at admission.",
+    "fit_tags": ["space and astronomy strength", "accessible admissions", "Arizona residents preferred", "desert Southwest", "optical sciences"]
+  },
+  {
+    "id": "college_uchicago",
+    "name": "University of Chicago",
+    "location": "Chicago, IL",
+    "college_type": "Private Research University",
+    "sample_programs": ["Economics", "Political Science", "Mathematics", "Public Policy", "Molecular Engineering"],
+    "gpa_band": "reach",
+    "pathway_notes": "Known for its rigorous, discussion-based 'Core' curriculum and an intellectual culture that prizes ideas over prestige-chasing. Economics and public policy programs are among the strongest in the world, with multiple Nobel laureates on faculty over the school's history. Located in Hyde Park with direct access to downtown Chicago's finance, consulting, and policy sectors.",
+    "affordability_notes": "Need-blind for US students; meets 100% of demonstrated need. Families earning under $125K with typical assets pay nothing under the Odyssey Scholarship / No Barriers program.",
+    "fit_tags": ["rigorous core curriculum", "economics and policy", "intellectual culture", "need-blind aid", "Chicago location"]
+  },
+  {
+    "id": "college_vanderbilt",
+    "name": "Vanderbilt University",
+    "location": "Nashville, TN",
+    "college_type": "Private Research University",
+    "sample_programs": ["Human & Organizational Development", "Computer Science", "Music Business", "Engineering", "Pre-Med"],
+    "gpa_band": "reach",
+    "pathway_notes": "A top-15 national university with unusually strong pre-med and pre-law placement and a distinctive Music Business program tied to Nashville's music industry. Southern campus culture with a close-knit, less cutthroat academic environment than many peer institutions. Strong Greek life and SEC athletics culture.",
+    "affordability_notes": "Need-blind admissions; meets 100% of demonstrated need with no loans in aid packages (grants only). Families earning under $150K with typical assets often pay little to nothing.",
+    "fit_tags": ["no-loan financial aid", "pre-med and pre-law", "music business", "Southern campus culture", "SEC athletics"]
+  },
+  {
+    "id": "college_rice",
+    "name": "Rice University",
+    "location": "Houston, TX",
+    "college_type": "Private Research University",
+    "sample_programs": ["Computer Science", "Bioengineering", "Architecture", "Music (Shepherd School)", "Economics"],
+    "gpa_band": "reach",
+    "pathway_notes": "A small, highly selective research university with an unusually generous student-to-faculty ratio and a residential college system that builds tight-knit communities. Bioengineering and computer science are elite, bolstered by proximity to the Texas Medical Center — the largest medical complex in the world. Notably lower cost of attendance than most peer-tier private universities.",
+    "affordability_notes": "Need-blind admissions; meets 100% of demonstrated need. The Rice Investment covers full tuition for families earning under $140K and full tuition-plus-expenses for families under $75K — one of the most generous aid programs among elite privates.",
+    "fit_tags": ["small elite research university", "bioengineering", "generous financial aid", "Houston medical corridor", "residential college system"]
+  },
+  {
+    "id": "college_case_western",
+    "name": "Case Western Reserve University",
+    "location": "Cleveland, OH",
+    "college_type": "Private Research University",
+    "sample_programs": ["Biomedical Engineering", "Computer Science", "Nursing", "Music (with Cleveland Institute of Music)", "Management"],
+    "gpa_band": "target",
+    "pathway_notes": "A research-intensive private university known for biomedical engineering, nursing, and pre-health programs, benefiting from proximity to the Cleveland Clinic and University Hospitals. Merit scholarships are large and common — a meaningfully more affordable elite-private option than many peers for well-qualified students. Cross-registration with the Cleveland Institute of Music and Institute of Art.",
+    "affordability_notes": "Sticker tuition is around $60K/year, but merit scholarships (often $20K-$30K+) are awarded to a large share of admitted students, meaningfully lowering the real cost for strong applicants.",
+    "fit_tags": ["biomedical engineering", "heavy merit aid", "pre-health pipeline", "Cleveland medical corridor", "research-intensive"]
+  },
+  {
+    "id": "college_nebraska_lincoln",
+    "name": "University of Nebraska–Lincoln",
+    "location": "Lincoln, NE",
+    "college_type": "Public Research University",
+    "sample_programs": ["Agriculture Science", "Engineering", "Business", "Actuarial Science", "Journalism"],
+    "gpa_band": "likely",
+    "pathway_notes": "A land-grant flagship known nationally for its actuarial science program (one of the oldest and most respected in the country) and strong agriculture and engineering programs tied to the region's farming and biofuel industries. Comparatively easy admissions relative to peer flagships, with a genuinely affordable sticker price.",
+    "affordability_notes": "In-state tuition around $10K/year; out-of-state roughly $27K. The Nebraska Promise covers full tuition for in-state students from families earning under $65K.",
+    "fit_tags": ["actuarial science strength", "agriculture and engineering", "affordable flagship", "Nebraska residents preferred", "accessible admissions"]
+  },
+  {
+    "id": "college_buffalo",
+    "name": "University at Buffalo (SUNY)",
+    "location": "Buffalo, NY",
+    "college_type": "Public Research University",
+    "sample_programs": ["Engineering", "Computer Science", "Architecture", "Pharmacy", "Management"],
+    "gpa_band": "likely",
+    "pathway_notes": "The largest and most research-intensive campus in the SUNY system, offering a genuine large-public-research-university experience at a fraction of the cost of most flagships. Strong engineering, architecture, and pharmacy programs. A practical option for students who want research opportunities and a real college town without elite-private sticker prices.",
+    "affordability_notes": "In-state (New York resident) tuition is around $8K-$9K/year — one of the most affordable research universities of its size in the country. Out-of-state is roughly $22K-$25K, still low relative to most public flagships.",
+    "fit_tags": ["very affordable", "SUNY system", "research opportunities", "New York residents preferred", "engineering and architecture"]
+  },
+  {
+    "id": "college_missouri_st",
+    "name": "Missouri University of Science and Technology",
+    "location": "Rolla, MO",
+    "college_type": "Public Research University",
+    "sample_programs": ["Mechanical Engineering", "Computer Science", "Petroleum Engineering", "Ceramic Engineering", "Physics"],
+    "gpa_band": "target",
+    "pathway_notes": "A small, STEM-only public university with an outsized reputation in engineering — graduates are recruited heavily by Boeing, Caterpillar, and defense contractors. Small campus (around 7,000 students) means close faculty relationships and hands-on lab access rare at larger engineering schools. Among the best return-on-investment public STEM schools in the country.",
+    "affordability_notes": "In-state tuition around $10K/year; out-of-state roughly $28K. Strong, easy-to-earn merit scholarships based on GPA and test scores keep real cost low for well-prepared students.",
+    "fit_tags": ["STEM-only public university", "small engineering-focused campus", "strong ROI", "Missouri residents preferred", "hands-on labs"]
+  },
+  {
+    "id": "college_morehouse",
+    "name": "Morehouse College",
+    "location": "Atlanta, GA",
+    "college_type": "HBCU Men's College",
+    "sample_programs": ["Business", "Biology (pre-med)", "Political Science", "Computer Science", "Sociology"],
+    "gpa_band": "target",
+    "pathway_notes": "The nation's only all-male HBCU and alma mater of Martin Luther King Jr., with a mission centered on developing Black male leadership. Exceptional pre-med and pre-law placement relative to size. Located in Atlanta's University Center alongside Spelman and Clark Atlanta, giving students a broader cross-campus social and academic community while keeping Morehouse's own culture tight-knit.",
+    "affordability_notes": "Tuition around $28K/year. Part of the Atlanta University Center financial aid consortium; scholarships and need-based aid are widely available, including several full-ride merit programs for top applicants.",
+    "fit_tags": ["HBCU", "men's college", "Black male leadership development", "pre-med and pre-law pipeline", "Atlanta campus"]
   }
 ]

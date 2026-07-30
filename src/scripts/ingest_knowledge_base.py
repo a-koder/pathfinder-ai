@@ -14,6 +14,7 @@ What this script does:
 Prerequisites:
     OPENAI_API_KEY and PINECONE_API_KEY must be set in .env
 """
+import re
 import sys
 from pathlib import Path
 
@@ -24,6 +25,26 @@ from infrastructure.openai_client import OpenAIClient
 from infrastructure.pinecone_client import PineconeClient
 from infrastructure.knowledge_loader import KnowledgeLoader
 from services.embedding_service import EmbeddingService
+
+_STATE_ABBREVIATIONS = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
+    "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT",
+    "VA", "WA", "WV", "WI", "WY", "DC",
+}
+
+
+def _extract_state(location: str) -> str:
+    """Derive a normalized 2-letter state code from a location string like 'Cambridge, MA'
+    or 'Tempe, AZ (+ online)', for reliable Pinecone metadata filtering. Returns '' for
+    nationwide/online-only entries with no single home state - callers should treat that
+    as 'no state filter applies', not a data error."""
+    if "D.C." in location:
+        return "DC"
+    match = re.search(r",\s*([A-Z]{2})\b", location)
+    if match and match.group(1) in _STATE_ABBREVIATIONS:
+        return match.group(1)
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +146,7 @@ def _college_vector(c: dict, values: list[float]) -> dict:
             "gpa_band": c["gpa_band"],
             "college_type": c["college_type"],
             "location": c["location"],
+            "state": _extract_state(c["location"]),
             "fit_tags": c.get("fit_tags", []),
             "source_file": "colleges.json",
         },

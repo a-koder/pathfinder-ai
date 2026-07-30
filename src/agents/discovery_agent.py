@@ -12,6 +12,8 @@ _PROFILE_FIELDS = [
     "career_preferences",
     "college_preferences",
     "favorite_careers",
+    "location_preference",
+    "budget_preference",
 ]
 
 _LIST_FIELDS = {"interests", "strengths", "career_preferences", "college_preferences", "favorite_careers"}
@@ -24,6 +26,8 @@ _EMPTY_UPDATES = {
     "career_preferences": [],
     "college_preferences": [],
     "favorite_careers": [],
+    "location_preference": "",
+    "budget_preference": "",
 }
 
 _SAFE_QUESTION = "Tell me a bit about what subjects or activities you enjoy, or what you feel you're good at."

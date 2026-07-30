@@ -111,7 +111,7 @@ At-a-glance version of what's fully detailed in `docs/09_Agent_Contracts.md`. "E
 | Input Guardrail Agent | Pre-generation rule-based check (profanity / frustration / prompt-injection); blocks the turn on `prompt_injection_detected` only, profanity/frustration stay detection-only | `user_message` | `{flags, passed}` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
 | Memory Agent | Load, merge, and persist student profile + conversation history | `student_name`, profile updates, message content | Profile dict, `recent_messages`, `session_number` | SQLite unavailable → empty in-memory profile for that turn; saves become no-ops rather than raising | SQLite (via repositories) |
 | Discovery Agent | Extract profile fields from the latest message only; never invents GPA/grade | `student_name`, `user_message`, `existing_profile` | `student_profile_updates`, `confidence`, `missing_information`, `next_question` | Low-confidence/failed extraction → returns the existing profile unchanged plus a safe open-ended fallback question | OpenAI (`gpt-4o-mini` via `LLMService`); optional LangSmith trace |
-| Retrieval Agent | Semantic search over the knowledge base | `user_message`, `profile`, `top_k` | `query`, `retrieved_documents`, `retrieval_confidence` | Pinecone unreachable → transparent fallback to local tag-match search over the same JSON files | OpenAI (embeddings), Pinecone; optional LangSmith trace |
+| Retrieval Agent | Semantic search over the knowledge base; college results are state-filtered from `location_preference` and budget-boosted from `budget_preference` (decision D033) | `user_message`, `profile`, `top_k` | `query`, `retrieved_documents`, `retrieval_confidence` | Pinecone unreachable → transparent fallback to local tag-match search over the same JSON files | OpenAI (embeddings), Pinecone; optional LangSmith trace |
 | Recommendation Agent | Generate 3–5 grounded career/major/college recommendations | `user_message`, `profile`, `retrieved_context` | `recommendations[]`, `summary`, `follow_up_question` | Invalid/unusable model JSON → safe fallback response built from retrieved document titles instead of crashing | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
 | Path Planning Agent | Turn one selected recommendation into a phased roadmap | `profile`, `recommendations`, `selected_override` | `selected_path`, `source`, short/medium/long-term steps, skills, projects | Unusable output or nothing to plan around → generic 3-step fallback roadmap | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
 | Guardrail Agent | Post-generation rule-based safety check (10 flags) | `response_payload`, `profile`, `user_message` | `passed`, `flags`, `risk_level`, `required_revisions` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
@@ -177,10 +177,10 @@ pathfinder-ai/
 ├── docs/
 │
 ├── data/
-│   ├── careers.json                        # 54 curated careers
-│   ├── majors.json                         # 44 curated majors
-│   ├── colleges.json                       # 27 curated colleges
-│   └── interests.json                      # 45 curated interest areas
+│   ├── careers.json                        # 73 curated careers
+│   ├── majors.json                         # 47 curated majors
+│   ├── colleges.json                       # 45 curated colleges
+│   └── interests.json                      # 58 curated interest areas
 │
 ├── src/
 │   ├── app.py                              # Presentation — Streamlit UI only
@@ -281,9 +281,11 @@ MemoryAgent.load_memory(student_name)
 │   └── LLMService.generate_json(extraction_prompt)  (via OpenAIClient, gpt-4o-mini)                          │
 │                                                    ‖  (runs concurrently — decision D025)                    │
 │ RetrievalAgent.retrieve_relevant_context(user_message, profile, top_k=5)                                     │
-│   └── RetrievalService.search_all(query)                                                                     │
+│   └── RetrievalService.search_non_colleges(query)  (careers/majors/interests, unfiltered blend)              │
+│   └── RetrievalService.search_colleges(query, state=from location_preference)  (decision D033)               │
 │         ├── EmbeddingService.generate_embedding(query)  (via OpenAIClient)                                  │
 │         └── PineconeClient.query_vectors(vector)  └── fallback: KnowledgeLoader.search_by_tags()            │
+│         (budget_preference soft-boosts Public college_type in _rank_colleges(), no hard filter)              │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         │  (both threads joined before continuing)
         ▼

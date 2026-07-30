@@ -95,7 +95,7 @@ SQLite (`data/memory.db`), four tables plus observability: `students`, `profiles
 
 - List fields (`interests`, `strengths`, `career_preferences`, `college_preferences`, `favorite_careers`) accumulate without duplicates
 - Scalar fields (`grade_level`, `gpa`) only change when the student actually states a new value — never guessed or overwritten with something weaker
-- Four additional optional fields exist on the profile for guardrail checks (`location_preference`, `budget_preference`, `college_type_preference`, `pathway_preference`) — see Known Limitations
+- `location_preference` and `budget_preference` are extracted by `DiscoveryAgent` (prompt v2) like any other field, and feed both the guardrail checks and Retrieval's college filtering (see Pinecone RAG below). Two further optional fields, `college_type_preference` and `pathway_preference`, exist on the profile but aren't extracted yet — see Known Limitations
 
 A student is recognized by name (case-insensitive) — no authentication in this prototype.
 
@@ -103,9 +103,9 @@ A student is recognized by name (case-insensitive) — no authentication in this
 
 ## Pinecone RAG
 
-Four curated local datasets — `data/careers.json` (54), `data/majors.json` (44), `data/colleges.json` (27), `data/interests.json` (45) — embedded with OpenAI `text-embedding-3-small` and indexed in Pinecone (170 vectors, single `default` namespace, `doc_type` metadata filtering instead of separate indexes/namespaces).
+Four curated local datasets — `data/careers.json` (73), `data/majors.json` (47), `data/colleges.json` (45), `data/interests.json` (58) — embedded with OpenAI `text-embedding-3-small` and indexed in Pinecone (223 vectors, single `default` namespace, `doc_type` metadata filtering instead of separate indexes/namespaces).
 
-At query time, `RetrievalService.search_all()` embeds the student's message and returns the top-k semantically relevant documents across all doc types. If Pinecone is unreachable, retrieval falls back transparently to a local tag-intersection search over the same JSON files (`KnowledgeLoader.search_by_tags()`) — the system stays functional, just with lower-quality matching.
+At query time, `RetrievalAgent` runs two searches instead of one blended `search_all()`: `RetrievalService.search_non_colleges()` covers careers/majors/interests exactly as before, while `search_colleges()` is state- and gpa_band-aware — each college's `location` is normalized to a 2-letter `state` field at ingestion time, so a student's stated `location_preference` becomes a real Pinecone metadata filter (with a fallback to an unfiltered college search if the state match comes up short — the catalog is only 45 colleges). A stated `budget_preference` doesn't hard-filter — there's no real per-college cost data, only editorial notes — so it soft-boosts public colleges above private ones of similar relevance instead (see decision D033). If Pinecone is unreachable, retrieval falls back transparently to a local tag-intersection search over the same JSON files (`KnowledgeLoader.search_by_tags()`) — the system stays functional, just with lower-quality matching.
 
 Full design rationale (why one namespace, why metadata filtering over multiple indexes, ingestion instructions): `docs/13_RAG_Implementation.md`.
 
@@ -241,7 +241,7 @@ Three scenarios, chosen to each showcase a different part of the system in one t
 ## Known Limitations
 
 - `src/schemas/models.py` Pydantic models have drifted from the actual dict shapes agents pass around — no runtime validation layer enforces them today (see `docs/09_Agent_Contracts.md`)
-- `DiscoveryAgent` doesn't yet extract `location_preference` / `budget_preference` / `college_type_preference` / `pathway_preference` — those profile fields stay empty unless populated some other way
+- `DiscoveryAgent` doesn't yet extract `college_type_preference` / `pathway_preference` — those two profile fields stay empty unless populated some other way (`location_preference` / `budget_preference` are extracted as of prompt v2, see `docs/12_DECISION_LOG.md` D033)
 - No `out_of_scope` guardrail (e.g. scholarship/FAFSA questions aren't redirected — they're passed to the Recommendation Agent, which will attempt a weak, ungrounded answer)
 - No automated `pytest` suite — verification is via the scripts above, run manually against live APIs
 - Name-based student recognition only — no authentication, not suitable for real student data

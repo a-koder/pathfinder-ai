@@ -10,7 +10,7 @@ PathFinder AI uses Retrieval-Augmented Generation (RAG) to ground career, major,
 
 Four datasets under `data/`, each loaded by `KnowledgeLoader` and embedded/indexed by `src/scripts/ingest_knowledge_base.py`.
 
-### Careers — `data/careers.json` (54 entries)
+### Careers — `data/careers.json` (73 entries)
 
 | Field | Type | Description |
 |---|---|---|
@@ -26,7 +26,7 @@ Four datasets under `data/`, each loaded by `KnowledgeLoader` and embedded/index
 | `real_world_impact` | string | How this work affects people, companies, or communities |
 | `adjacent_paths` | list[string] | Related careers a student can explore instead |
 
-### Majors — `data/majors.json` (44 entries)
+### Majors — `data/majors.json` (47 entries)
 
 | Field | Type | Description |
 |---|---|---|
@@ -38,7 +38,7 @@ Four datasets under `data/`, each loaded by `KnowledgeLoader` and embedded/index
 | `skills_built` | list[string] | Skills developed through this program |
 | `typical_degree_types` | list[string] | e.g. `["Bachelor's", "Master's"]` |
 
-### Colleges — `data/colleges.json` (27 entries)
+### Colleges — `data/colleges.json` (45 entries)
 
 | Field | Type | Description |
 |---|---|---|
@@ -52,7 +52,9 @@ Four datasets under `data/`, each loaded by `KnowledgeLoader` and embedded/index
 | `affordability_notes` | string | General note on in-state tuition, financial aid reputation |
 | `fit_tags` | list[string] | Student profile tags this college matches |
 
-### Interests — `data/interests.json` (45 entries)
+Not a JSON field, but derived from `location` at ingestion time and stored as Pinecone metadata: `state`, a normalized 2-letter code used for `search_colleges(state=...)` filtering (decision D033) — see Metadata Strategy below.
+
+### Interests — `data/interests.json` (58 entries)
 
 | Field | Type | Description |
 |---|---|---|
@@ -151,7 +153,7 @@ RetrievalService.search_careers(query)
 | Dimension | 1536 |
 | Metric | cosine |
 | Cloud | AWS us-east-1 (serverless) |
-| Total vectors | 170 (54 careers + 44 majors + 27 colleges + 45 interests) |
+| Total vectors | 223 (73 careers + 47 majors + 45 colleges + 58 interests) |
 
 ---
 
@@ -193,10 +195,13 @@ Every vector carries a `metadata` dict stored alongside its embedding in Pinecon
   "gpa_band": "target",
   "college_type": "Public Research University",
   "location": "Atlanta, GA",
+  "state": "GA",
   "fit_tags": ["engineering powerhouse", "co-op programs", "great value"],
   "source_file": "colleges.json"
 }
 ```
+
+`state` is a normalized 2-letter code derived from `location` at ingestion time (`_extract_state()` in `ingest_knowledge_base.py`) — `location` itself is a free-text string ("Atlanta, GA", "Tempe, AZ (+ online)") not reliable for an exact-match Pinecone filter, so `state` exists specifically to make `search_colleges(state=...)` filtering work (decision D033 in `docs/12_DECISION_LOG.md`). Nationwide/online-only colleges (WGU, Lincoln Tech, the community college pathway entry) get `state: ""` — no single home state applies.
 
 **Interest:**
 ```json
@@ -215,11 +220,12 @@ Every vector carries a `metadata` dict stored alongside its embedding in Pinecon
 
 ### Per-Query Retrieval Flow
 
-When the Retrieval Agent runs:
+When the Retrieval Agent runs (`RetrievalAgent.retrieve_relevant_context()`):
 
-1. Discovery Agent has already extracted the student's profile (interests, GPA, grade level)
-2. The Orchestrator builds a query string combining the student message + profile context
-3. `RetrievalService` embeds the query and calls Pinecone with an appropriate filter
+1. Discovery Agent has already extracted the student's profile (interests, GPA, grade level, `location_preference`, `budget_preference`)
+2. The raw student message (not a profile-blended query string) is embedded and searched twice: once against everything except colleges, once against colleges only
+3. The college search is narrowed by a `state` filter derived from `location_preference` (see Filter Examples below) when one can be confidently inferred, with a fallback to an unfiltered college search if the state match returns too few candidates — the catalog is only 45 colleges, so an exact-match filter can reasonably come up short
+4. A `budget_preference` signaling affordability doesn't filter — there's no real per-college cost data, only editorial notes — it instead soft-boosts public colleges above private ones of similar relevance in `RetrievalAgent._rank_colleges()`
 
 ### Filter Examples
 
@@ -227,10 +233,13 @@ When the Retrieval Agent runs:
 # Retrieve only career documents
 filter = {"doc_type": {"$eq": "career"}}
 
-# Retrieve only college documents for a student with a 3.4 GPA
-filter = {"doc_type": {"$eq": "college"}, "gpa_band": {"$eq": "target"}}
+# Retrieve only college documents for a student who wants to stay in Georgia
+filter = {"doc_type": {"$eq": "college"}, "state": {"$eq": "GA"}}
 
-# Retrieve all document types (broad discovery query)
+# Retrieve everything except colleges (the live non-college search path)
+filter = {"doc_type": {"$ne": "college"}}
+
+# Retrieve all document types (used by the manual test_retrieval.py script only)
 filter = None
 ```
 
@@ -240,8 +249,9 @@ filter = None
 |---|---|---|
 | `search_careers(query)` | `doc_type = career` | Career exploration from interest/strength query |
 | `search_majors(query)` | `doc_type = major` | Major guidance from career or interest query |
-| `search_colleges(query, gpa_band)` | `doc_type = college` + optional `gpa_band` | College pathway guidance, GPA-aware |
-| `search_all(query)` | None | Broad discovery — find anything relevant |
+| `search_non_colleges(query)` | `doc_type != college` | Live path: careers/majors/interests in one blended call |
+| `search_colleges(query, gpa_band, state)` | `doc_type = college` + optional `gpa_band`/`state` | Live path: college pathway guidance, location-aware, with fallback backfill |
+| `search_all(query)` | None | Broad discovery — used only by the manual `test_retrieval.py` quality-check script, not the live agent path |
 
 ### Fallback Behavior
 
@@ -254,8 +264,8 @@ If Pinecone is unavailable (network error, quota exceeded, key missing), `Retrie
 The decision to use a single `"default"` namespace instead of separate namespaces per doc type was deliberate:
 
 **Rationale:**
-- Pinecone namespaces cannot be cross-queried in a single call. Using `career`, `major`, `college` as separate namespaces would require 3 separate API calls for a `search_all()` query.
-- A single namespace with `doc_type` metadata filtering is equivalent in isolation behavior but more flexible — `search_all()` costs one call, and filtered searches cost one call.
+- Pinecone namespaces cannot be cross-queried in a single call. Using `career`, `major`, `college` as separate namespaces would require a separate API call per doc type for any broad query.
+- A single namespace with `doc_type` metadata filtering is equivalent in isolation behavior but more flexible — a filtered search still costs exactly one call, whether the filter is `doc_type = career` or the more granular `doc_type = college AND state = GA` used by the live retrieval path today.
 - Namespace proliferation becomes a maintenance burden if doc types expand (e.g., adding `interest` or future `activity` or `scholarship` types).
 - Metadata filters apply efficiently on serverless Pinecone indexes with low vector counts.
 
@@ -318,25 +328,25 @@ python src/scripts/ingest_knowledge_base.py
 ```
 Connected to Pinecone index 'pathfinder-ai'.
 
-[careers] Embedding 54 records...
+[careers] Embedding 73 records...
   + Software Engineer
   + Data Scientist
   ...
-  -> 54 vectors upserted.
+  -> 73 vectors upserted.
 
-[majors] Embedding 44 records...
+[majors] Embedding 47 records...
   ...
-  -> 44 vectors upserted.
+  -> 47 vectors upserted.
 
-[colleges] Embedding 27 records...
-  ...
-  -> 27 vectors upserted.
-
-[interests] Embedding 45 records...
+[colleges] Embedding 45 records...
   ...
   -> 45 vectors upserted.
 
-Ingestion complete: 170 vectors in index 'pathfinder-ai' (namespace: default).
+[interests] Embedding 58 records...
+  ...
+  -> 58 vectors upserted.
+
+Ingestion complete: 223 vectors in index 'pathfinder-ai' (namespace: default).
 ```
 
 ### Re-ingestion
@@ -349,10 +359,10 @@ The script uses the record `id` field as the Pinecone vector ID. Re-running the 
 
 | Item | Tokens (approx) | Cost |
 |---|---|---|
-| 54 career texts (~300 tokens each) | ~16,200 | ~$0.0003 |
-| 44 major texts (~150 tokens each) | ~6,600 | ~$0.0001 |
-| 27 college texts (~250 tokens each) | ~6,750 | ~$0.0001 |
-| 45 interest texts (~200 tokens each) | ~9,000 | ~$0.0002 |
-| **Total** | **~38,550** | **~$0.0008** |
+| 73 career texts (~300 tokens each) | ~21,900 | ~$0.0004 |
+| 47 major texts (~150 tokens each) | ~7,050 | ~$0.0001 |
+| 45 college texts (~250 tokens each) | ~11,250 | ~$0.0002 |
+| 58 interest texts (~200 tokens each) | ~11,600 | ~$0.0002 |
+| **Total** | **~51,800** | **~$0.0009** |
 
 Full ingestion costs under $0.01 at current OpenAI embedding pricing. Re-ingestion after data updates is cheap enough to run freely.

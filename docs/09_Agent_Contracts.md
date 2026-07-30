@@ -115,7 +115,7 @@ The same `tracing_service` instance is passed to all seven — one shared client
 
 **Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → (if `prompt_injection_detected` fired, short-circuit here and return a blocked-turn result — see decision D032 and the Input Guardrail Agent section below; everything past this point assumes it did not) → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `_match_previous_choice()` (checks whether this message names one of last turn's offered recommendations, decision D028) → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` (using the matched item as `selected_override` if one was found) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results and the same `selected_override`) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (persists this turn's offered items for the next turn's choice matching) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
 
-**Parallelization (decision D025):** Discovery and Retrieval both depend only on memory load's output — Discovery needs the pre-turn profile, Retrieval only needs the raw message (its `profile` argument is accepted but unused, see Retrieval Agent below) — and neither depends on the other's output, so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI / Pinecone through a shared, thread-safe SDK client), so this overlaps wait time rather than parallelizing CPU work — no change in output for any given input, only latency. The Input Guardrail check was also moved to run before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
+**Parallelization (decision D025):** Discovery and Retrieval both depend only on memory load's output — Discovery needs the pre-turn profile to extract updates, Retrieval needs the pre-turn profile's `location_preference`/`budget_preference` to filter colleges (decision D033; see Retrieval Agent below) — and neither depends on the other's output (Retrieval uses the profile as it existed *before* this turn's Discovery updates, not after), so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI / Pinecone through a shared, thread-safe SDK client), so this overlaps wait time rather than parallelizing CPU work — no change in output for any given input, only latency. The Input Guardrail check was also moved to run before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
 
 **Critic / revision loop (decision D023):** `input_guardrail`, `discovery`, and `retrieval` run once per turn regardless of evaluation outcome — only `recommendation.generate_recommendations()`, `path_planning.generate_path_plan()`, `guardrail.check_guardrails()`, and `evaluation.evaluate()` are re-run on a retry, via the shared `_generate_and_score()` helper in `orchestrator.py`. At most one retry ever happens: the loop is a single `if`, not a `while`, so a still-low score after the retry is accepted and surfaced (with the "needs more info" note) rather than retried again. `revision_attempted` is `true` whenever a retry happened, `false` otherwise — set once and never re-evaluated after the retry decision.
 
@@ -207,7 +207,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** If SQLite is unavailable, `load_memory` returns an empty in-memory profile (`{"conversation_summary": ""}`) and `update_profile`/`save_turn` become no-ops for that turn rather than raising.
 
-**Note:** `location_preference`, `budget_preference`, `college_type_preference`, and `pathway_preference` exist on `StudentProfile` (`src/schemas/models.py`) as optional fields for the Guardrail Agent to check, but `DiscoveryAgent` does not currently extract them from conversation — they stay empty unless set some other way. This is a known gap, not a bug (see `docs/12_DECISION_LOG.md`).
+**Note:** `location_preference` and `budget_preference` exist on `StudentProfile` (`src/schemas/models.py`) and are extracted by `DiscoveryAgent` (prompt v2) like any other field — they feed both the Guardrail Agent's checks and Retrieval's college filtering (see Retrieval Agent below and decision D033 in `docs/12_DECISION_LOG.md`). `college_type_preference` and `pathway_preference` are not extracted yet and stay empty unless set some other way — a known gap, not a bug.
 
 ---
 
@@ -290,9 +290,9 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 5. Retrieval Agent
 
-**Responsibility:** Runs `RetrievalService.search_all()` (semantic search across all doc types, no filter) for the student's message and normalizes the results.
+**Responsibility:** Runs two semantic searches against Pinecone and normalizes the merged results — `RetrievalService.search_non_colleges()` for careers/majors/interests (unfiltered blend, as `search_all()` used to do for everything), and `search_colleges()` for colleges specifically, narrowed by the profile's `location_preference` (as a `state` metadata filter, decision D033) and `budget_preference` (as a soft public/private re-rank, not a hard filter — there's no real per-college cost data to justify excluding a school outright).
 
-**When called:** After Discovery Agent, before Recommendation Agent.
+**When called:** Concurrently with Discovery Agent, not after it (see decision D025 in the Orchestrator section above) — both depend only on memory load's output, not on each other.
 
 **Input:** `retrieve_relevant_context(user_message, profile, top_k=5)`.
 
@@ -307,6 +307,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
       "title": "Data Analyst",
       "score": 0.62,
       "metadata": {"interest_tags": ["math", "data"], "related_majors": ["statistics"]}
+    },
+    {
+      "doc_id": "college_ut_austin",
+      "doc_type": "college",
+      "title": "University of Texas at Austin",
+      "score": 0.58,
+      "metadata": {"gpa_band": "target", "college_type": "Public Research University", "state": "TX"}
     }
   ],
   "retrieval_confidence": 0.58
@@ -317,6 +324,11 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 - `retrieved_documents` may be empty but is never null
 - `doc_type` is one of `career`, `major`, `college`, or `interest` (the knowledge base includes an `interests.json` dataset in addition to careers/majors/colleges)
 - `retrieval_confidence` is the average score across the returned documents
+- Of the `top_k` requested, at most 2 slots go to colleges (`_MAX_COLLEGE_SLOTS` in `retrieval_agent.py`) — the rest go to the non-college search
+
+**State inference:** `_infer_state_code()` maps a free-text `location_preference` (e.g. "California", "stay in Texas") to a 2-letter state code via a name/abbreviation lookup table; anything it can't confidently resolve (e.g. "somewhere warm", "close to home") returns no filter rather than guessing. If the state-filtered college search returns fewer than the requested slots, `RetrievalService.search_colleges()` backfills with an unfiltered college search — the curated catalog is only 45 colleges, so an exact state match can reasonably come up short.
+
+**Ranking (`_rank_colleges()`):** an actual state match always outranks a backfilled out-of-state candidate, regardless of budget signal; within that, a `budget_preference` signaling affordability (keywords like "afford", "budget", "financial aid", "in-state") boosts `Public` `college_type` candidates above `Private` ones; raw semantic score is the final tie-break. State is checked first because it's a stated hard preference, while budget is intentionally a soft nudge on top of it.
 
 **Failure behavior:** If Pinecone is unavailable, `RetrievalService` falls back to `KnowledgeLoader.search_by_tags()` (local tag-intersection search) transparently — the agent normalizes either result shape into the contract above without the caller needing to know which path was used.
 

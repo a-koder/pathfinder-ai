@@ -448,5 +448,135 @@
     "career_directions": ["Real Estate Agent", "Real Estate Developer", "Property Manager", "Commercial Appraiser", "Construction Manager", "Urban Planner", "Mortgage Broker", "Building Inspector", "Real Estate Lawyer", "REIT Analyst"],
     "strength_connections": ["negotiation", "spatial reasoning", "business acumen", "relationship building"],
     "pathway_note": "Real estate doesn't require a four-year degree for entry. A real estate license can be earned in months; development paths benefit from business or engineering degrees."
+  },
+  {
+    "id": "interest_aviation",
+    "label": "Aviation & Flight",
+    "category": "STEM",
+    "description": "Fascination with how aircraft fly, flight simulators, and the engineering and operations behind air travel.",
+    "example_activities": ["flight simulator games", "plane spotting", "building model aircraft", "watching aviation documentaries", "visiting air shows"],
+    "career_directions": ["Aerospace Engineer", "Commercial Pilot", "Air Traffic Controller", "Aviation Mechanic", "Flight Test Engineer"],
+    "strength_connections": ["spatial reasoning", "attention to detail", "composure under pressure", "systems thinking"],
+    "pathway_note": "Paths diverge early: engineering routes go through a four-year STEM degree, while piloting can start with flight school hours independent of a college major."
+  },
+  {
+    "id": "interest_automotive",
+    "label": "Cars & Automotive",
+    "category": "Trades & Technical",
+    "description": "Interest in how vehicles work, from engines and electronics to design and racing.",
+    "example_activities": ["working on cars with family/friends", "watching racing (F1, NASCAR)", "following EV/car tech news", "car shows", "video games like Forza or Gran Turismo"],
+    "career_directions": ["Automotive Engineer", "Mechanical Engineer", "Auto Mechanic/Technician", "Automotive Designer", "EV Battery Engineer"],
+    "strength_connections": ["hands-on building", "mechanical reasoning", "problem solving", "attention to detail"],
+    "pathway_note": "Technician paths lead through trade school certification in under two years; engineering and design paths require a four-year mechanical or automotive engineering degree."
+  },
+  {
+    "id": "interest_photography",
+    "label": "Photography",
+    "category": "Arts & Media",
+    "description": "Capturing and editing images, from portraits and events to nature and street photography.",
+    "example_activities": ["shooting photos with a phone or camera", "editing in Lightroom/Photoshop", "posting a photography portfolio online", "photographing school events or sports"],
+    "career_directions": ["Professional Photographer", "Photojournalist", "Wedding/Event Photographer", "Cinematographer", "Photo Editor"],
+    "strength_connections": ["visual composition", "attention to detail", "patience", "technical/editing skills"],
+    "pathway_note": "Many working photographers build a career through a strong portfolio and freelance clients rather than a formal degree, though film/media programs strengthen technical and business skills."
+  },
+  {
+    "id": "interest_reading",
+    "label": "Reading & Literature",
+    "category": "Humanities & Social Sciences",
+    "description": "Enjoyment of reading fiction, nonfiction, or poetry, and thinking critically about stories and ideas.",
+    "example_activities": ["reading for pleasure", "joining a book club", "writing book reviews or a reading blog", "participating in literary magazines"],
+    "career_directions": ["Editor", "Literary Agent", "Librarian", "English Teacher", "Book Publicist"],
+    "strength_connections": ["critical thinking", "vocabulary and communication", "empathy", "analytical reading"],
+    "pathway_note": "Strong reading habits build the writing and analysis skills that transfer directly into English, journalism, law, and publishing career paths."
+  },
+  {
+    "id": "interest_public_speaking",
+    "label": "Public Speaking & Debate",
+    "category": "Public Service & Law",
+    "description": "Enjoyment of arguing a position, persuading an audience, or presenting ideas clearly and confidently.",
+    "example_activities": ["joining debate or Model UN", "giving speeches or presentations", "mock trial competitions", "student government campaigns"],
+    "career_directions": ["Lawyer / Attorney", "Politician", "Diplomat", "Communications Director", "Motivational Speaker"],
+    "strength_connections": ["argumentation", "confidence", "quick thinking", "persuasive communication"],
+    "pathway_note": "Debate and Model UN experience directly build the skills law schools and political science programs look for, and often lead to scholarships."
+  },
+  {
+    "id": "interest_volunteering",
+    "label": "Volunteering & Community Service",
+    "category": "Health & Human Services",
+    "description": "Drive to give back through organized service — food banks, shelters, tutoring, or community organizing.",
+    "example_activities": ["volunteering at a shelter or food bank", "organizing a school service drive", "tutoring younger students", "joining a community service club"],
+    "career_directions": ["Social Worker", "Nonprofit Program Manager", "Community Organizer", "Nonprofit Director", "Peace Corps Volunteer"],
+    "strength_connections": ["empathy", "organization", "initiative", "communication"],
+    "pathway_note": "Sustained volunteer leadership (not just hours logged) is one of the strongest signals for social work, nonprofit, and public policy programs."
+  },
+  {
+    "id": "interest_camping",
+    "label": "Camping & Outdoor Survival",
+    "category": "Environment & Agriculture",
+    "description": "Enjoyment of camping, backpacking, and learning wilderness and survival skills.",
+    "example_activities": ["camping or backpacking trips", "learning survival/bushcraft skills", "Scouts or outdoor youth programs", "wilderness first aid training"],
+    "career_directions": ["Park Ranger", "Wilderness Guide", "Wildlife Biologist", "Search and Rescue Specialist", "Outdoor Education Instructor"],
+    "strength_connections": ["resourcefulness", "physical stamina", "risk assessment", "self-reliance"],
+    "pathway_note": "Park and conservation service roles often start with seasonal or volunteer positions before requiring an environmental science or recreation management degree."
+  },
+  {
+    "id": "interest_woodworking",
+    "label": "Woodworking & DIY",
+    "category": "Trades & Technical",
+    "description": "Building and fixing things by hand — furniture, home repair projects, and hands-on craftsmanship.",
+    "example_activities": ["building furniture or small projects", "home repair/DIY YouTube tutorials", "woodshop class", "restoring or upcycling furniture"],
+    "career_directions": ["Carpenter", "Furniture Maker", "General Contractor", "Construction Manager", "Cabinetmaker"],
+    "strength_connections": ["hands-on building", "patience", "spatial reasoning", "attention to detail"],
+    "pathway_note": "Apprenticeships and trade school programs (often under two years) lead directly into paid carpentry and construction work without a four-year degree."
+  },
+  {
+    "id": "interest_board_games",
+    "label": "Board Games & Strategy",
+    "category": "Arts & Media",
+    "description": "Enjoyment of strategy games, tabletop RPGs, and competitive puzzle-solving with others.",
+    "example_activities": ["board game or tabletop RPG nights", "chess club or tournaments", "designing a custom board game", "competitive strategy gaming"],
+    "career_directions": ["Game Designer", "Board Game Publisher", "Data Analyst", "Actuary", "Game Developer"],
+    "strength_connections": ["strategic thinking", "patience", "logical reasoning", "social collaboration"],
+    "pathway_note": "Strategy-game skills transfer well into game design and analytical careers; designing and publishing a custom game is a strong portfolio piece for game design programs."
+  },
+  {
+    "id": "interest_theater",
+    "label": "Theater & Acting",
+    "category": "Arts & Media",
+    "description": "Performing in plays and musicals, or working behind the scenes on stage productions.",
+    "example_activities": ["school or community theater productions", "improv classes", "stage crew/tech theater", "acting workshops"],
+    "career_directions": ["Actor", "Theater Director", "Stage Manager", "Drama Teacher", "Casting Director"],
+    "strength_connections": ["confidence", "memorization", "collaboration", "emotional expression"],
+    "pathway_note": "Conservatory programs (like Juilliard) are highly selective and audition-based; many working actors build careers through community theater, regional companies, and steady auditioning instead."
+  },
+  {
+    "id": "interest_podcasting",
+    "label": "Podcasting & Broadcasting",
+    "category": "Arts & Media",
+    "description": "Interest in creating audio content, hosting shows, or working in radio/broadcast media.",
+    "example_activities": ["starting a podcast", "school radio or announcing club", "interviewing people for a show", "editing audio content"],
+    "career_directions": ["Podcast Producer", "Radio Host / DJ", "Sound Engineer", "Broadcast Journalist", "Audio Content Creator"],
+    "strength_connections": ["communication", "interviewing skills", "technical/editing skills", "consistency"],
+    "pathway_note": "A self-produced podcast is a real, checkable portfolio piece — many broadcast and media careers value a demonstrated show over a specific degree."
+  },
+  {
+    "id": "interest_gardening",
+    "label": "Gardening & Plants",
+    "category": "Environment & Agriculture",
+    "description": "Enjoyment of growing plants, gardening, and understanding how ecosystems and soil work.",
+    "example_activities": ["home or school gardening", "growing vegetables or houseplants", "joining a community garden", "landscaping projects"],
+    "career_directions": ["Horticulturist", "Landscape Architect", "Botanist", "Urban Farmer", "Agronomist"],
+    "strength_connections": ["patience", "observation", "care for living things", "planning"],
+    "pathway_note": "Hands-on gardening experience is exactly the practical background agriculture science and horticulture programs look for in applicants."
+  },
+  {
+    "id": "interest_puzzles",
+    "label": "Puzzles & Problem-Solving Games",
+    "category": "STEM",
+    "description": "Enjoyment of logic puzzles, escape rooms, riddles, and brain-teaser style problem solving.",
+    "example_activities": ["solving puzzles (Sudoku, crosswords, logic puzzles)", "escape rooms", "competitive puzzle-hunt events", "coding puzzle challenges (like Advent of Code)"],
+    "career_directions": ["Software Engineer", "Actuary", "Cryptographer", "Data Scientist", "Game Designer"],
+    "strength_connections": ["logical thinking", "persistence", "pattern recognition", "analytical reasoning"],
+    "pathway_note": "Puzzle-solving habits map directly onto the analytical thinking tested in computer science, math, and actuarial coursework and entrance exams."
   }
 ]

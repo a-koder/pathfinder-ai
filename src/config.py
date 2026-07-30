@@ -17,7 +17,7 @@ LANGSMITH_TRACING: bool = os.getenv("LANGSMITH_TRACING", "false").strip().lower(
 # Prompt / ruleset versions. Each defaults to the current "v1" content so behavior is
 # unchanged unless a version is explicitly bumped. See src/services/prompt_loader.py
 # and src/prompts/<category>/<version>.md|.yaml.
-DISCOVERY_PROMPT_VERSION: str = os.getenv("DISCOVERY_PROMPT_VERSION", "v1")
+DISCOVERY_PROMPT_VERSION: str = os.getenv("DISCOVERY_PROMPT_VERSION", "v2")
 RECOMMENDATION_PROMPT_VERSION: str = os.getenv("RECOMMENDATION_PROMPT_VERSION", "v1")
 PATH_PLANNING_PROMPT_VERSION: str = os.getenv("PATH_PLANNING_PROMPT_VERSION", "v1")
 EVALUATION_PROMPT_VERSION: str = os.getenv("EVALUATION_PROMPT_VERSION", "rascef_v1")

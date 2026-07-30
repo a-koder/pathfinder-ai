@@ -394,5 +394,32 @@
     "recommended_subjects": ["AP Biology", "AP Chemistry", "AP Environmental Science", "Statistics", "Calculus"],
     "skills_built": ["laboratory techniques", "scientific writing", "ecology", "genetics", "experimental design"],
     "typical_degree_types": ["Bachelor of Science", "Bachelor of Arts"]
+  },
+  {
+    "id": "major_physics",
+    "name": "Physics",
+    "description": "Study of the fundamental laws governing matter, energy, motion, and the universe — from subatomic particles to galaxies.",
+    "related_careers": ["Astronomer / Astrophysicist", "Aerospace Engineer", "Data Scientist", "Robotics Engineer", "Geospatial Engineer"],
+    "recommended_subjects": ["AP Physics", "Calculus", "AP Computer Science", "Statistics"],
+    "skills_built": ["mathematical modeling", "experimental design", "quantitative problem solving", "data analysis", "scientific reasoning"],
+    "typical_degree_types": ["Bachelor of Science"]
+  },
+  {
+    "id": "major_chemistry",
+    "name": "Chemistry",
+    "description": "Study of matter, chemical reactions, and molecular structure — foundational for medicine, materials science, and industrial engineering careers.",
+    "related_careers": ["Chemical Engineer", "Physician", "Pharmacist", "Environmental Scientist", "Forensic Scientist"],
+    "recommended_subjects": ["AP Chemistry", "AP Biology", "Calculus", "Physics"],
+    "skills_built": ["laboratory techniques", "quantitative analysis", "molecular reasoning", "scientific writing", "safety protocols"],
+    "typical_degree_types": ["Bachelor of Science"]
+  },
+  {
+    "id": "major_architecture",
+    "name": "Architecture",
+    "description": "Study of designing buildings and spaces, combining engineering fundamentals, art, and building science into functional, safe, and aesthetic structures.",
+    "related_careers": ["Architect", "Urban Planner", "Civil Engineer", "Interior Designer"],
+    "recommended_subjects": ["Calculus", "Physics", "Art/Studio Art", "Drafting/CAD"],
+    "skills_built": ["spatial design", "architectural drafting (CAD/Revit)", "building codes", "3D modeling", "project management"],
+    "typical_degree_types": ["Bachelor of Architecture", "Bachelor of Science"]
   }
 ]

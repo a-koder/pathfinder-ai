@@ -30,11 +30,11 @@ For what's explicitly out of scope for the MVP today, see `docs/01_Product_Overv
 
 **Today:** Explicitly out of scope for the MVP (`docs/01_Product_Overview.md`) — PathFinder AI has no scholarship data or matching logic at all.
 
-**Next step:** A scholarship-matching capability, likely as its own MCP-exposed tool or dedicated service, that the Recommendation Agent or Path Planning Agent could query once a student's profile (GPA, interests, budget preference) is established. This is a natural extension of the existing `budget_preference` guardrail check (`missing_budget_for_affordability_guidance`), which today only detects the *absence* of budget context — a scholarship integration would let the system act on it.
+**Next step:** A scholarship-matching capability, likely as its own MCP-exposed tool or dedicated service, that the Recommendation Agent or Path Planning Agent could query using the student's profile (GPA, interests, `budget_preference` — extracted since decision D033). Retrieval already uses `budget_preference` to soft-boost affordable colleges (a `college_type` proxy, since there's no real per-college cost data); a scholarship integration would be the next layer — real financial-aid matching on top of that same signal, not a new field to capture it.
 
 ## College APIs
 
-**Today:** College data is a static, curated dataset (`data/colleges.json`, 27 entries) — embedded once and served through the same RAG pipeline as careers and majors (`docs/13_RAG_Implementation.md`). Real-time admissions data, deadlines, or acceptance-rate APIs were explicitly excluded from MVP scope.
+**Today:** College data is a static, curated dataset (`data/colleges.json`, 45 entries) — embedded once and served through the same RAG pipeline as careers and majors (`docs/13_RAG_Implementation.md`). Real-time admissions data, deadlines, or acceptance-rate APIs were explicitly excluded from MVP scope.
 
 **Next step:** Layer a live college-data API (admissions statistics, deadlines, program updates) behind the same `RetrievalService`/`doc_type: college` pattern already in place, so real-time facts augment — rather than replace — the curated, editorially-controlled college dataset. Keeping the curated dataset as the grounding source and using a live API only for time-sensitive facts (deadlines, current tuition) avoids re-introducing the hallucination risk RAG was built to prevent.
 

@@ -136,10 +136,10 @@ Transition: "None of this matters if the recommendations aren't grounded in some
 
 ## Grounded, Not Guessed
 
-- **170 curated documents**: 54 careers, 44 majors, 27 colleges, 45 interest areas
+- **223 curated documents**: 73 careers, 47 majors, 45 colleges, 58 interest areas
 - Embedded with OpenAI (`text-embedding-3-small`), searched via **Pinecone**
-- **Metadata strategy**: `doc_type` + `gpa_band` filtering in one index, one namespace — no separate indexes to keep in sync
-- **Retrieval filtering**: top-k=5 by default, narrowed to a single `doc_type` when the question is type-specific (e.g. "what should I major in?")
+- **Metadata strategy**: `doc_type` + `gpa_band` + `state` filtering in one index, one namespace — no separate indexes to keep in sync
+- **Retrieval filtering**: top-k=5 by default, split into a non-college search plus a college search that's state-aware (from a stated location preference) and budget-aware (a soft public/private boost, since there's no real per-college cost data)
 - **Grounding verification**: every recommendation carries an `evidence` field pointing at the retrieved document behind it — a guardrail flag fires if one has none
 - Falls back to local tag search if Pinecone is unreachable
 
@@ -317,7 +317,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 |---|---|---|
 | Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
 | Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
-| RAG | ✅ | Pinecone + OpenAI embeddings, 170 docs, metadata filtering, tested local fallback |
+| RAG | ✅ | Pinecone + OpenAI embeddings, 223 docs, metadata filtering, tested local fallback |
 | Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails block on prompt-injection, detect-only on profanity/frustration by design; 2 output flags not yet reachable |
 | Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
 | Structured Outputs | ✅ | JSON contracts everywhere; reference Pydantic models exist, not yet runtime-enforced |
@@ -475,7 +475,7 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation · Age
 | 3 | The Solution | Name what was built, in plain language | One conversation, 10 coordinating agents, memory + grounding + safety |
 | 4 | Architecture, End to End | Show engineering discipline | Clean Architecture, SOLID, dependency inversion — not a script |
 | 5 | One Conversation Turn | Show the exact agent sequence | Concurrency where safe, one bounded retry, never more |
-| 6 | Grounded, Not Guessed | Prove recommendations aren't hallucinated | 170 real documents, semantic search, graceful fallback |
+| 6 | Grounded, Not Guessed | Prove recommendations aren't hallucinated | 223 real documents, semantic search, graceful fallback |
 | 7 | Responsible AI, By Design | Address safety head-on | Guardrails run before *and* after generation, plus a self-correcting score |
 | 8 | Governed and Observed | Show operational maturity | Versioned prompts, real per-turn cost, full traceability |
 | 9 | What Makes It Feel Like a Counselor | Bring it back to the student experience | Memory and choice-aware roadmaps, not a static quiz |

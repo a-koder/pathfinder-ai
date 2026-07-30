@@ -1,6 +1,33 @@
+import re
+
 from services.retrieval_service import RetrievalService
 from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
+
+_STATE_NAME_TO_CODE = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
+    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT", "vermont": "VT",
+    "virginia": "VA", "washington": "WA", "west virginia": "WV", "wisconsin": "WI",
+    "wyoming": "WY", "washington dc": "DC", "washington d.c.": "DC", "d.c.": "DC",
+}
+_VALID_STATE_CODES = set(_STATE_NAME_TO_CODE.values())
+
+_AFFORDABILITY_KEYWORDS = [
+    "afford", "budget", "low cost", "low-cost", "cheap", "inexpensive", "financial aid",
+    "scholarship", "in-state", "in state", "public school", "public college",
+    "public university", "cost is a concern", "cost-conscious", "tuition",
+]
+
+_MAX_COLLEGE_SLOTS = 2
+_CANDIDATE_POOL_MULTIPLIER = 3
 
 
 def _normalize_document(result: dict) -> dict:
@@ -25,10 +52,62 @@ def _normalize_document(result: dict) -> dict:
     }
 
 
+def _infer_state_code(location_preference: str) -> str | None:
+    """Best-effort mapping from a free-text location preference (as extracted by the
+    Discovery Agent, e.g. "California", "stay in Texas", "somewhere warm") to a 2-letter
+    state code matching the ingestion-time `state` metadata field. Returns None for
+    anything that doesn't clearly name a specific state - vague preferences fall back to
+    unfiltered semantic search rather than guessing."""
+    if not location_preference:
+        return None
+    text = location_preference.strip().lower()
+
+    direct = text.upper()
+    if len(direct) == 2 and direct in _VALID_STATE_CODES:
+        return direct
+
+    for name, code in _STATE_NAME_TO_CODE.items():
+        if re.search(rf"\b{re.escape(name)}\b", text):
+            return code
+    return None
+
+
+def _wants_affordability(budget_preference: str) -> bool:
+    if not budget_preference:
+        return False
+    lowered = budget_preference.lower()
+    return any(keyword in lowered for keyword in _AFFORDABILITY_KEYWORDS)
+
+
+def _rank_colleges(colleges: list[dict], state: str | None, budget_preference: str) -> list[dict]:
+    """Rank the candidate pool: an actual state match always outranks a backfilled
+    out-of-state candidate (state is a stated hard preference; backfill only exists to
+    pad out a small catalog), then a soft public-college boost when the student has
+    signaled affordability, then raw semantic score as the final tie-break. The budget
+    signal is intentionally a re-rank, not a hard filter - the dataset has no per-college
+    cost figures, only editorial affordability_notes text, so a hard cutoff would
+    overclaim precision the data doesn't support."""
+    wants_affordability = _wants_affordability(budget_preference)
+
+    def _sort_key(doc: dict) -> tuple:
+        doc_state = doc.get("metadata", {}).get("state", "")
+        state_rank = 0 if (state and doc_state == state) else 1
+        college_type = str(doc.get("metadata", {}).get("college_type", "")).lower()
+        is_public = "public" in college_type
+        budget_rank = 0 if (wants_affordability and is_public) else 1
+        return (state_rank, budget_rank, -doc.get("score", 0.0))
+
+    return sorted(colleges, key=_sort_key)
+
+
 class RetrievalAgent:
     """
-    Retrieves the top-k most relevant career, major, and college documents
-    from Pinecone for the student's current message and profile.
+    Retrieves the top-k most relevant career, major, and interest documents from
+    Pinecone for the student's current message, plus a separate college search that
+    can be narrowed by the student's stated location/budget preferences (structured
+    Pinecone metadata filtering with a soft budget-based re-rank, not a hard exclude -
+    the catalog is small enough that an exact-match filter can come up short even for
+    a perfectly reasonable preference).
 
     Service dependencies: RetrievalService, TracingService (optional)
     """
@@ -44,10 +123,28 @@ class RetrievalAgent:
         top_k: int = 5,
         usage: UsageTracker | None = None,
     ) -> dict:
-        """Runs RetrievalService.search_all() and returns a RetrievalOutput-shaped dict."""
-        results = self._retrieval_service.search_all(user_message, top_k=top_k, usage=usage)
-        retrieved_documents = [_normalize_document(r) for r in results]
+        """Runs a non-college search plus a location/budget-aware college search and
+        returns a RetrievalOutput-shaped dict."""
+        profile = profile or {}
+        state = _infer_state_code(profile.get("location_preference", ""))
+        budget_preference = profile.get("budget_preference", "")
 
+        college_slots = min(_MAX_COLLEGE_SLOTS, top_k)
+        non_college_slots = top_k - college_slots
+
+        non_college_docs = self._retrieval_service.search_non_colleges(
+            user_message, top_k=non_college_slots, usage=usage,
+        ) if non_college_slots > 0 else []
+        college_candidates = self._retrieval_service.search_colleges(
+            user_message, top_k=college_slots * _CANDIDATE_POOL_MULTIPLIER, state=state, usage=usage,
+        ) if college_slots > 0 else []
+
+        normalized_colleges = _rank_colleges(
+            [_normalize_document(r) for r in college_candidates], state, budget_preference,
+        )[:college_slots]
+        normalized_non_colleges = [_normalize_document(r) for r in non_college_docs]
+
+        retrieved_documents = normalized_non_colleges + normalized_colleges
         scores = [d["score"] for d in retrieved_documents]
         retrieval_confidence = sum(scores) / len(scores) if scores else 0.0
 
@@ -58,11 +155,15 @@ class RetrievalAgent:
         }
         self._tracing.trace_event(
             name="retrieval",
-            inputs={"user_message": user_message, "top_k": top_k},
+            inputs={"user_message": user_message, "top_k": top_k, "state_filter": state},
             outputs={
                 "retrieved_titles": [d["title"] for d in retrieved_documents],
                 "retrieval_confidence": retrieval_confidence,
             },
-            metadata={"retrieved_document_count": len(retrieved_documents)},
+            metadata={
+                "retrieved_document_count": len(retrieved_documents),
+                "state_filter": state,
+                "budget_boost_applied": _wants_affordability(budget_preference),
+            },
         )
         return result
