@@ -18,11 +18,12 @@ LANGSMITH_TRACING: bool = os.getenv("LANGSMITH_TRACING", "false").strip().lower(
 # unchanged unless a version is explicitly bumped. See src/services/prompt_loader.py
 # and src/prompts/<category>/<version>.md|.yaml.
 DISCOVERY_PROMPT_VERSION: str = os.getenv("DISCOVERY_PROMPT_VERSION", "v2")
-INTENT_ROUTER_PROMPT_VERSION: str = os.getenv("INTENT_ROUTER_PROMPT_VERSION", "v2")
+INTENT_ROUTER_PROMPT_VERSION: str = os.getenv("INTENT_ROUTER_PROMPT_VERSION", "v4")
 RECOMMENDATION_PROMPT_VERSION: str = os.getenv("RECOMMENDATION_PROMPT_VERSION", "v1")
 PATH_PLANNING_PROMPT_VERSION: str = os.getenv("PATH_PLANNING_PROMPT_VERSION", "v1")
 EVALUATION_PROMPT_VERSION: str = os.getenv("EVALUATION_PROMPT_VERSION", "rascef_v1")
 GENERAL_CHAT_PROMPT_VERSION: str = os.getenv("GENERAL_CHAT_PROMPT_VERSION", "v1")
+SUGGESTIONS_PROMPT_VERSION: str = os.getenv("SUGGESTIONS_PROMPT_VERSION", "v1")
 GUARDRAIL_RULESET_VERSION: str = os.getenv("GUARDRAIL_RULESET_VERSION", "v1")
 INPUT_GUARDRAIL_RULESET_VERSION: str = os.getenv("INPUT_GUARDRAIL_RULESET_VERSION", "v1")
 
@@ -56,6 +57,7 @@ def prompt_version_metadata() -> dict:
         "path_planning_prompt_version": f"path_planning_{PATH_PLANNING_PROMPT_VERSION}",
         "evaluation_prompt_version": EVALUATION_PROMPT_VERSION,
         "general_chat_prompt_version": f"general_chat_{GENERAL_CHAT_PROMPT_VERSION}",
+        "suggestions_prompt_version": f"suggestions_{SUGGESTIONS_PROMPT_VERSION}",
         "guardrail_ruleset_version": f"guardrail_{GUARDRAIL_RULESET_VERSION}",
         "input_guardrail_ruleset_version": f"input_guardrail_{INPUT_GUARDRAIL_RULESET_VERSION}",
     }

@@ -189,6 +189,47 @@ def _generate_general_chat_response(
     return response_text
 
 
+_SUGGESTIONS_SYSTEM_PROMPT = load_prompt("suggestions", config.SUGGESTIONS_PROMPT_VERSION)
+
+
+def _generate_suggestions_response(
+    user_message: str,
+    profile: dict,
+    retrieved_context: dict,
+    usage: UsageTracker | None = None,
+) -> str:
+    """
+    Used for the intent router's "suggest" flow (decision D037): the student shared
+    interests/strengths without explicitly asking for a full list yet, so this returns a
+    short, lightweight response naming 2-4 career/major directions - not the full
+    why-it-fits/opportunities/risks/next-steps detail RecommendationAgent produces, and
+    never mentions specific colleges (those come once a career/major direction is settled,
+    via the "related_topic" flow). Grounded by retrieved career/major context when
+    relevant; no path plan, since it's too early for one.
+    """
+    retrieved_documents = (retrieved_context or {}).get("retrieved_documents", [])
+    doc_titles = [d.get("title", "") for d in retrieved_documents if d.get("title")]
+    context_block = f"Possibly relevant knowledge-base topics: {', '.join(doc_titles)}" if doc_titles else (
+        "No closely relevant knowledge-base documents were retrieved yet."
+    )
+
+    user_prompt = (
+        f"Student profile: {profile}\n\n"
+        f"{context_block}\n\n"
+        f"Student's message: {user_message}"
+    )
+    response_text = _llm_service.generate_text(
+        system_prompt=_SUGGESTIONS_SYSTEM_PROMPT, user_prompt=user_prompt, usage=usage,
+    )
+    _tracing_service.trace_event(
+        name="suggestions",
+        inputs={"user_message": user_message, "retrieved_document_count": len(retrieved_documents)},
+        outputs={"response": response_text},
+        metadata={"retrieved_titles": doc_titles},
+    )
+    return response_text
+
+
 _ENRICHMENT_SYSTEM_PROMPT = (
     "You add short, engaging, positively-framed enrichment to a list of career, major, or "
     "college recommendations for a high school student. For each title given, provide: "
@@ -253,7 +294,9 @@ def _generate_and_score(
 ) -> tuple[dict, dict, str, dict, dict, dict]:
     """
     Runs one full generate-and-check attempt, branching on the intent router's decision
-    (decision D034):
+    (decision D034, "suggest" added in D037):
+      - "suggest": skip recommendation/path-plan generation entirely - a short, lightweight
+        response naming a few career/major directions, no full detail, no colleges yet.
       - "explore"/"related_topic": generate a fresh recommendation set (related_topic adds
         anchor_context so an ambiguous follow-up like "colleges for same" stays grounded in
         what was actually being discussed) -> path plan -> response text.
@@ -267,7 +310,13 @@ def _generate_and_score(
     attempt and the single critic/revision retry, so both attempts go through identical
     logic; both record into the same `usage` tracker, so a retry's tokens are counted too.
     """
-    if mode == "general_chat":
+    if mode == "suggest":
+        response_text = _generate_suggestions_response(
+            user_message, current_profile, retrieval, usage=usage,
+        )
+        recommendations = {"recommendations": [], "summary": "", "follow_up_question": ""}
+        path_plan = {}
+    elif mode == "general_chat":
         response_text = _generate_general_chat_response(
             user_message, current_profile, recent_messages or [], retrieval, usage=usage,
         )
@@ -325,7 +374,10 @@ def _generate_and_score(
         guardrail_result=guardrail,
         input_guardrail_flags=input_guardrail_flags,
         revision_attempted=revision_attempted,
-        is_general_chat=(mode == "general_chat"),
+        # "suggest" reuses general_chat's evaluation adaptation (decision D037): both are
+        # free-form text with no recommendation structure to score against, so the same
+        # is_general_chat flag applies to both rather than adding a near-duplicate param.
+        is_general_chat=(mode in ("general_chat", "suggest")),
         usage=usage,
     )
 
@@ -463,9 +515,9 @@ def run_turn(student_name: str, user_message: str) -> dict:
     Agent sequence:
       input guardrail → memory.load → (block here if prompt injection detected) →
       [discovery ‖ intent_router] → merge profile → resolve anchor → retrieval (skipped for
-      "roadmap") → recommendation/roadmap/general-chat (branches on intent) → guardrail →
-      evaluation → (critic/revision retry, max 1) → remember recommendations →
-      observability → memory.save
+      "roadmap") → suggest/recommendation/roadmap/general-chat (branches on intent,
+      decision D037) → guardrail → evaluation → (critic/revision retry, max 1) → remember
+      recommendations (skipped for "suggest"/"general_chat") → observability → memory.save
 
     Discovery and Intent Router run concurrently on worker threads: Discovery needs the
     pre-turn profile from memory.load to extract updates, and Intent Router needs that same
@@ -592,11 +644,12 @@ def run_turn(student_name: str, user_message: str) -> dict:
         response_payload["response"] = response_text
 
     # 9d. Remember this turn's offered recommendations so a later turn can recognize the
-    # student's reply naming one of them. Skipped for "general_chat" - there are no new
-    # recommendations this turn, and overwriting with an empty list would erase a still-
-    # relevant earlier anchor (e.g. a side question mid-conversation about Mental Health
-    # Counselor shouldn't wipe out the ability to later ask for "a roadmap for that").
-    if intent != "general_chat":
+    # student's reply naming one of them. Skipped for "general_chat" and "suggest" - neither
+    # produces a structured recommendation list, and overwriting with an empty list would
+    # erase a still-relevant earlier anchor (e.g. a side question mid-conversation about
+    # Mental Health Counselor shouldn't wipe out the ability to later ask for "a roadmap
+    # for that", and a lightweight "suggest" reply shouldn't either).
+    if intent not in ("general_chat", "suggest"):
         _memory.remember_last_recommendations(student_id, recommendations.get("recommendations", []))
 
     # 9e. Display-only enrichment (fun facts, future outlook) - runs after guardrails and

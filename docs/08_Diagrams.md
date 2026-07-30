@@ -15,8 +15,8 @@ flowchart LR
         IGA["Input\nGuardrail"] --> MEM["Memory\n(load)"]
         MEM --> PAR["Discovery ‖ Intent Router\n(concurrent)"]
         PAR --> RET["Retrieval\n(skipped for roadmap)"]
-        RET --> REC["Recommendation\n(skipped for roadmap/general_chat)"]
-        REC --> PLAN["Path Planning\n(skipped for general_chat)"]
+        RET --> REC["Recommendation\n(skipped for roadmap/general_chat/suggest)"]
+        REC --> PLAN["Path Planning\n(skipped for general_chat/suggest)"]
         PLAN --> GRD["Guardrail\n(safety check)"]
         GRD --> EVAL["Evaluation\n(RASCEF score)"]
     end
@@ -70,13 +70,13 @@ sequenceDiagram
         DA-->>ORC: Updated profile fields (interests, GPA, grade, location/budget preference)
     and
         ORC->>IRA: Classify intent (recent conversation + last turn's offered titles)
-        IRA-->>ORC: intent (explore/roadmap/related_topic/general_chat) + anchor_title
+        IRA-->>ORC: intent (suggest/explore/roadmap/related_topic/general_chat) + anchor_title
     end
 
     ORC->>MA: Merge profile updates + persist
     MA-->>ORC: Merged profile
 
-    Note over ORC: Resolve anchor_title against the merged profile's<br/>last_recommendations (decision D034). Falls back to<br/>"explore" if it can't be confidently resolved.
+    Note over ORC: Resolve anchor_title against the merged profile's<br/>last_recommendations (decision D034). Falls back to<br/>"explore" if it can't be confidently resolved, or if<br/>"suggest" was returned with no prior conversation (D037).
 
     alt intent == roadmap
         Note over ORC: Skip Retrieval and Recommendation entirely -<br/>nothing new needs grounding.
@@ -88,6 +88,11 @@ sequenceDiagram
         RETA-->>ORC: Retrieved documents (may be empty)
         ORC->>RA: (skipped - no structured recommendations for this turn)
         Note over ORC: Direct conversational answer, grounded by profile +<br/>history + retrieved context when relevant - no roadmap.
+    else intent == suggest
+        ORC->>RETA: Retrieve context (no anchor)
+        RETA-->>ORC: Retrieved documents (careers/majors)
+        ORC->>RA: (skipped - lightweight reply only, decision D037)
+        Note over ORC: Short reply naming 2-4 career/major directions -<br/>no full detail, no colleges yet, no roadmap.
     else intent == explore or related_topic
         ORC->>RETA: Search (related_topic passes anchor_title/type as extra grounding)
         RETA->>EMB: Embed retrieval query (+ anchor context if set)
@@ -105,12 +110,12 @@ sequenceDiagram
     ORC->>GA: Check response for unsafe claims
     GA-->>ORC: Guardrail flags (if any)
 
-    ORC->>EA: Score response quality (RASCEF; general_chat scored on answer<br/>substance, not recommendation structure)
+    ORC->>EA: Score response quality (RASCEF; general_chat/suggest scored on<br/>answer substance, not recommendation structure)
     EA-->>ORC: Dimension scores (out of 30)
     EA->>LS: Trace (prompt versions, score, badge, guardrail + input guardrail flags)
 
     alt total_score < 24 (critic / revision loop, max 1 retry)
-        Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning; general_chat only retries the answer)
+        Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning; general_chat/suggest only retry the answer)
         ORC->>GA: Re-check response
         GA-->>ORC: Guardrail flags (if any)
         ORC->>EA: Re-score (max one retry, accepted either way)
@@ -118,7 +123,7 @@ sequenceDiagram
         EA->>LS: Trace (revision_attempted: true)
     end
 
-    opt intent != general_chat
+    opt intent not in (general_chat, suggest)
         ORC->>MA: Remember this turn's offered recommendations<br/>(for the next turn's intent routing)
         MA-->>ORC: Confirmed
     end
@@ -262,7 +267,7 @@ flowchart TD
     MSG["Raw Student Message"]
     IG{"Input Guardrail\nprofanity / frustration /\nprompt-injection?"}
     BLOCKED["Fixed safe response returned\nNo LLM call - $0.00 cost\nIntent Router/Discovery/Retrieval/Recommendation/\nPath Planning/Guardrail/Evaluation all skipped"]
-    GEN["Intent-routed generation (D034):\nRecommendation + Path Planning (explore/related_topic),\nPath Planning only (roadmap, reused recs),\nor a direct answer (general_chat)"]
+    GEN["Intent-routed generation (D034, suggest added D037):\nRecommendation + Path Planning (explore/related_topic),\nPath Planning only (roadmap, reused recs),\nor a direct answer (general_chat/suggest)"]
 
     subgraph Guardrails ["Output Guardrail — 10 Rule-Based Flags"]
         G1["High risk: admission_guarantee,\nsalary_guarantee, protected_attribute_bias"]

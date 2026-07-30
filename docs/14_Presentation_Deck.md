@@ -119,22 +119,25 @@ Transition: "Let's zoom into what happens on a single message."
 **Input Guardrail → Memory Load → Discovery ‖ Intent Router → Retrieval/Recommendation/Path Planning (branches on intent) → Guardrail → Evaluation → (retry once, if needed) → Observability → Memory Save**
 
 - Discovery and Intent Router run **concurrently** — independent work, no wasted latency
-- Intent Router (decision D034) classifies every turn as **explore** (new recommendations), **roadmap** (plan for something already offered — recommendations reused verbatim, not regenerated), **related_topic** (more info tied to an established anchor), or **general_chat** (a direct answer, no recommendation shape forced)
+- Intent Router (decision D034, **suggest** added in D037) classifies every turn as **suggest** (pure interest-sharing — a short, lightweight reply, no colleges yet), **explore** (new recommendations — an explicit ask, or uncertainty like "I don't know what career I want"), **roadmap** (plan for something already offered — recommendations reused verbatim, not regenerated), **related_topic** (more info tied to an established anchor), or **general_chat** (a direct answer, no recommendation shape forced)
 - A low quality score triggers **one** automatic regenerate-and-recheck, never more
 
 <!--
-Speaker notes (40-50s):
+Speaker notes (45-55s):
 Every message goes through this exact sequence, but not every message does the same work.
 Discovery and the new Intent Router run concurrently, since neither depends on the other's
-output. The router's job: figure out what kind of turn this actually is. Ask for new
-career ideas, and it's "explore" - the full pipeline runs. Ask for "a roadmap for that one"
-and it's "roadmap" - recommendations are reused verbatim, only the plan regenerates. Ask
-"colleges for same" and it's "related_topic" - grounded in whatever was just discussed, not
-a blind guess. Ask something like "what does deferred admission mean" and it's
-"general_chat" - answered directly, no recommendation format forced onto it. If the
-quality score comes back low, the system regenerates once automatically - a bounded critic
-loop, not an infinite retry. This branching is what makes PathFinder AI verifiably
-multi-agent, not one big prompt with section headers.
+output. The router's job: figure out what kind of turn this actually is. Just share an
+interest with nothing else - "I like gaming and reading" - mid-conversation, and it's
+"suggest" - a short, lightweight reply naming a few directions, not a full breakdown. Ask
+for new career ideas, or say you don't know what you want, and it's "explore" - the full
+pipeline runs. Ask for "a roadmap for that one" and it's "roadmap" - recommendations are
+reused verbatim, only the plan regenerates. Ask "colleges for same" and it's
+"related_topic" - grounded in whatever was just discussed, not a blind guess. Ask something
+like "what does deferred admission mean" and it's "general_chat" - answered directly, no
+recommendation format forced onto it. If the quality score comes back low, the system
+regenerates once automatically - a bounded critic loop, not an infinite retry. This
+branching is what makes PathFinder AI verifiably multi-agent, not one big prompt with
+section headers.
 Transition: "None of this matters if the recommendations aren't grounded in something real."
 -->
 
@@ -297,14 +300,14 @@ Transition (after demo): "Let's close with where this stands and what's next."
 
 - Verified with **14 scripted end-to-end/integration tests** across every agent
 - RASCEF pass threshold: **24/30** — auto-retry below that, always logged either way
-- **35 documented architecture decisions** (`D001`–`D035`), each with alternatives considered
+- **37 documented architecture decisions** (`D001`–`D037`), each with alternatives considered
 - Known gap, stated plainly: no automated `pytest` suite yet — verification is manual-script-based
 
 <!--
 Speaker notes (30-40s):
 A few honest numbers instead of a vibe: 14 scripted tests cover the full workflow, the
 revision loop, human feedback, prompt versioning, intent-routing accuracy, and observability,
-run against live APIs rather than mocks. Every architecture and product decision — 35 of them — is logged
+run against live APIs rather than mocks. Every architecture and product decision — 37 of them — is logged
 with what alternative was considered and why it lost, which is what makes this auditable
 rather than "trust me." And I'll say the quiet part out loud: there's no automated pytest
 suite yet, verification today is manual-script-based. That's a real gap, not glossed over.
@@ -573,7 +576,7 @@ Applying just #1 (skip 13–16) comfortably brings a timed talk to ~11.5–13 mi
 | Orchestrator | Coordinates the full turn; applies the one-retry critic/revision loop |
 | Input Guardrail | Flags profanity, frustration (detection only) — blocks the turn on prompt-injection |
 | Memory | Loads, merges, and persists student profile + conversation history |
-| Intent Router | Classifies each turn (explore / roadmap / related_topic / general_chat) and resolves implicit references ("same", "that one") to what was actually offered last turn |
+| Intent Router | Classifies each turn (suggest / explore / roadmap / related_topic / general_chat) and resolves implicit references ("same", "that one") to what was actually offered last turn |
 | Discovery | Extracts profile fields from the student's latest message |
 | Retrieval | Semantic search over the knowledge base via Pinecone |
 | Recommendation | Generates 3–5 grounded career/major/college options |

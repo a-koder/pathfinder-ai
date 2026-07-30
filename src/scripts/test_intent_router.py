@@ -1,5 +1,6 @@
 """
-Golden-dataset accuracy test for the Intent Router Agent (decision D034).
+Golden-dataset accuracy test for the Intent Router Agent (decision D034, "suggest" added
+in D037).
 
 Usage (from project root, with .venv_win active):
     python src/scripts/test_intent_router.py
@@ -9,12 +10,16 @@ What this script does:
     this one computes real classification metrics - per-class precision/recall/F1 and
     a confusion matrix - because intent routing is the one stage in this system with
     genuine, checkable ground truth. RASCEF quality scoring is inherently subjective
-    (a 1-5 LLM judgment call); "explore" vs "roadmap" vs "related_topic" vs "general_chat"
-    is a discrete label a human can verify a test case against in advance.
+    (a 1-5 LLM judgment call); "suggest" vs "explore" vs "roadmap" vs "related_topic" vs
+    "general_chat" is a discrete label a human can verify a test case against in advance.
 
-    Runs IntentRouterAgent.classify_intent() against a curated set of 20 hand-written
-    cases (5 per intent) against the real OpenAI API - no mocks, consistent with every
-    other script in this folder.
+    Runs IntentRouterAgent.classify_intent() against a curated set of hand-written cases
+    against the real OpenAI API - no mocks, consistent with every other script in this
+    folder. Includes regression cases for two real bugs D037 caught during development:
+    pure interest-sharing being confused with uncertainty-expressing ("I like X but don't
+    know what career I want" must stay "explore", not "suggest"), and "suggest" firing on
+    a genuinely first message (must stay "explore" - this exact confusion once broke the
+    capstone's own scripted live demo line).
 
 Prerequisites:
     OPENAI_API_KEY must be set in .env
@@ -29,7 +34,7 @@ from infrastructure.openai_client import OpenAIClient
 from services.llm_service import LLMService
 from agents.intent_router_agent import IntentRouterAgent
 
-_INTENTS = ["explore", "roadmap", "related_topic", "general_chat"]
+_INTENTS = ["suggest", "explore", "roadmap", "related_topic", "general_chat"]
 
 # What "good" means for this test, stated explicitly rather than left as raw numbers to
 # eyeball (unlike RASCEF's 24/30 or the guardrail's pass/fail, this test had no declared
@@ -54,7 +59,65 @@ def _turn(role: str, content: str) -> dict:
 
 
 GOLDEN_DATASET = [
-    # ---- explore (5): new recommendations, no clear anchor to something already offered ----
+    # ---- suggest (5): pure interest-sharing mid-conversation, no explicit ask, no
+    # uncertainty signal. Never valid on a genuinely first message (see explore-6 below) -
+    # enforced in code (IntentRouterAgent._validate()), not just prompt instructions. ----
+    {
+        "label": "suggest-1: pure interest-sharing mid-conversation",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I'm also really into cooking and travel.",
+        "expected_intent": "suggest",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "suggest-2: describing a strength, no ask",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I'm pretty good at math and enjoy solving puzzles.",
+        "expected_intent": "suggest",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "suggest-3: describing interests, no ask",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I really like helping people and volunteering at my school.",
+        "expected_intent": "suggest",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "suggest-4: new hobby mentioned, no ask",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I've always loved music and photography too.",
+        "expected_intent": "suggest",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "suggest-5: hands-on interest, no ask",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I enjoy working with my hands and fixing things around the house.",
+        "expected_intent": "suggest",
+        "expected_anchor_title": None,
+    },
+    # ---- explore (7): new recommendations, no clear anchor to something already offered ----
     {
         "label": "explore-1: first message, no prior context",
         "recent_messages": [],
@@ -101,6 +164,28 @@ GOLDEN_DATASET = [
         "recent_messages": [],
         "last_recommendations": [],
         "user_message": "Can you build a roadmap for that?",
+        "expected_intent": "explore",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "explore-6: pure interest-sharing on a genuinely first message "
+                  "(regression case - the capstone's own live demo line; must never "
+                  "resolve to 'suggest' on turn 1, enforced in code, not just prompt)",
+        "recent_messages": [],
+        "last_recommendations": [],
+        "user_message": "I like gaming, storytelling, and technology.",
+        "expected_intent": "explore",
+        "expected_anchor_title": None,
+    },
+    {
+        "label": "explore-7: interests plus uncertainty-seeking-direction language "
+                  "(regression case - must not be confused with pure interest-sharing)",
+        "recent_messages": [
+            _turn("user", "I like coding and data."),
+            _turn("assistant", "Data Scientist and Software Engineer could be strong fits."),
+        ],
+        "last_recommendations": _DEFAULT_LAST_RECS,
+        "user_message": "I like fashion and business but I don't know what career fits me.",
         "expected_intent": "explore",
         "expected_anchor_title": None,
     },

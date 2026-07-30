@@ -6,7 +6,7 @@ from services.prompt_loader import load_prompt
 from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
-_VALID_INTENTS = {"explore", "roadmap", "related_topic", "general_chat"}
+_VALID_INTENTS = {"suggest", "explore", "roadmap", "related_topic", "general_chat"}
 _ANCHORED_INTENTS = {"roadmap", "related_topic"}
 _HISTORY_LIMIT = 6
 _TRAILING_TYPE_SUFFIX = re.compile(r"\s*\([a-z_]+\)\s*$", re.IGNORECASE)
@@ -44,14 +44,18 @@ def _format_last_recommendations(last_recommendations: list[dict]) -> str:
 
 class IntentRouterAgent:
     """
-    Classifies each turn's intent - explore (new recommendations), roadmap (plan for an
-    already-offered item), related_topic (more career/college info tied to an already-
-    offered item), or general_chat (a genuine question outside the recommendation flow,
-    e.g. FAFSA, essay advice, term definitions) - so the orchestrator can route to the
-    right amount of work instead of forcing every message through the same "generate new
-    recommendations" pipeline. Replaces the old literal-title-only _match_previous_choice()
-    with something that can resolve implicit references ("same", "that one") using actual
-    conversation history, which the old mechanism never had access to.
+    Classifies each turn's intent - suggest (sharing interests without an explicit ask;
+    a lightweight career/major-only response), explore (an explicit ask for
+    recommendations - full detail), roadmap (plan for an already-offered item),
+    related_topic (more career/college info tied to an already-offered item - this is
+    where a settled career/major naturally leads into college suggestions), or
+    general_chat (a genuine question outside the recommendation flow, e.g. FAFSA, essay
+    advice, term definitions) - so the orchestrator can route to the right amount of work
+    instead of forcing every message through the same "generate new recommendations"
+    pipeline (decision D037 added "suggest" on top of D034's original four). Replaces the
+    old literal-title-only _match_previous_choice() with something that can resolve
+    implicit references ("same", "that one") using actual conversation history, which the
+    old mechanism never had access to.
 
     Service dependencies: LLMService, TracingService (optional)
     """
@@ -82,7 +86,7 @@ class IntentRouterAgent:
         )
 
         raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
-        result = self._validate(raw, last_recommendations)
+        result = self._validate(raw, last_recommendations, is_first_message=not recent_messages)
 
         self._tracing.trace_event(
             name="intent_router",
@@ -92,13 +96,22 @@ class IntentRouterAgent:
         )
         return result
 
-    def _validate(self, raw: dict, last_recommendations: list[dict]) -> dict:
+    def _validate(self, raw: dict, last_recommendations: list[dict], is_first_message: bool) -> dict:
         """
         Never trusts the raw model output blindly: an unparseable response, an invalid
         intent, or an anchor_title that doesn't exactly match a title actually offered
         last turn all fall back to "explore" - the same full-pipeline behavior this turn
         would have gotten before this agent existed, so a bad classification degrades to
         today's behavior rather than breaking the turn or acting on a hallucinated anchor.
+
+        "suggest" is also forced to "explore" on a genuinely first message (no prior
+        conversation at all) - decision D037 narrowed this in code rather than leaving it
+        to prompt instructions alone, after the prompt's own judgment turned out to be
+        unreliable on this exact boundary: it broke the capstone's own scripted live demo
+        line ("I like gaming, storytelling, and technology.") by routing a first message
+        to a lightweight response instead of the full recommendation pipeline that demo
+        depends on. A real first-time visitor typically wants to see options fairly
+        quickly; "suggest" is more useful once a conversation is already warming up.
         """
         fallback = {"intent": "explore", "anchor_title": None, "reasoning": ""}
         if not isinstance(raw, dict):
@@ -107,6 +120,9 @@ class IntentRouterAgent:
         intent = raw.get("intent")
         if intent not in _VALID_INTENTS:
             return fallback
+
+        if intent == "suggest" and is_first_message:
+            intent = "explore"
 
         reasoning = raw.get("reasoning")
         reasoning = reasoning.strip() if isinstance(reasoning, str) else ""

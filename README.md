@@ -29,7 +29,7 @@ Infrastructure src/infrastructure/        Only layer that imports openai / pinec
 Domain         src/schemas/models.py      Reference Pydantic models
 ```
 
-Every conversation turn runs the same first few steps, then branches on intent (decision D034):
+Every conversation turn runs the same first few steps, then branches on intent (decision D034, "suggest" added in D037):
 
 ```
 Student message
@@ -40,22 +40,25 @@ Student message
   → Intent Router Agent (classify the turn)     ┘  neither depends on the other's output
   → Memory Agent (merge + persist profile, after both threads join)
   → Resolve the router's anchor_title against the merged profile's last_recommendations
+    (also forces "suggest" -> "explore" if this is a genuinely first message, decision D037)
   → Branch on intent:
       "roadmap"       → skip Retrieval + Recommendation; reuse last turn's items verbatim;
                          Path Planning builds a roadmap around the resolved anchor
       "general_chat"  → Retrieval only if relevant (no anchor); a direct conversational
                          answer; no Recommendation, no Path Planning
+      "suggest"       → Retrieval (no anchor); a short reply naming 2-4 career/major
+                         directions, no colleges yet; no Recommendation, no Path Planning
       "explore" /
       "related_topic" → Retrieval (related_topic adds the anchor as grounding context)
                          → Recommendation (3-5 grounded options) → Path Planning (roadmap
                          for the top option)
   → Guardrail Agent (rule-based safety check, every branch)
-  → Evaluation Agent (RASCEF quality score, every branch - general_chat scored on answer
-    substance rather than recommendation structure; traced to LangSmith if configured)
+  → Evaluation Agent (RASCEF quality score, every branch - general_chat/suggest scored on
+    answer substance rather than recommendation structure; traced to LangSmith if configured)
   → [critic/revision loop: if score < 24, re-run only the branch that ran above, once]
   → Enrichment (fun facts + future outlook added per recommendation, display-only)
   → Observability Agent (log the turn)
-  → Memory Agent (save the turn; last_recommendations only updated outside general_chat)
+  → Memory Agent (save the turn; last_recommendations left untouched after general_chat/suggest)
   → Response + trace → Streamlit UI
 ```
 
@@ -84,7 +87,7 @@ Full contracts for every agent: `docs/09_Agent_Contracts.md`. Full architecture 
 | Orchestrator | Runs the fixed pipeline above; assembles the final response and trace; runs the critic/revision retry |
 | Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags); runs first, before memory load; blocks the turn only on `prompt_injection_detected`, profanity/frustration remain detection-only |
 | Memory Agent | Loads/merges/persists the student profile and message history |
-| Intent Router Agent | Classifies each turn as explore/roadmap/related_topic/general_chat and resolves implicit references ("same", "that one") against last turn's offered items, using real conversation history; runs concurrently with Discovery |
+| Intent Router Agent | Classifies each turn as suggest/explore/roadmap/related_topic/general_chat and resolves implicit references ("same", "that one") against last turn's offered items, using real conversation history; runs concurrently with Discovery |
 | Discovery Agent | Extracts profile fields from the latest message only; never invents GPA or grade level; runs concurrently with Intent Router |
 | Retrieval Agent | Semantic search over the knowledge base via Pinecone; skipped for "roadmap", anchor-grounded for "related_topic" |
 | Recommendation Agent | 3-5 grounded career/major/college recommendations, each with why-it-fits, why-exciting, opportunities, risks, and next steps; skipped for "roadmap"/"general_chat" |
@@ -101,16 +104,19 @@ Each agent is a small class receiving its dependencies via constructor injection
 
 ## Intent Routing
 
-Every message used to be forced through the same "generate new recommendations" pipeline, regardless of what the student was actually asking. Decision D034 fixed that: `IntentRouterAgent` classifies each turn — using recent conversation history and last turn's offered titles, not just the raw message — into one of four intents:
+Every message used to be forced through the same "generate new recommendations" pipeline, regardless of what the student was actually asking. Decision D034 fixed that: `IntentRouterAgent` classifies each turn — using recent conversation history and last turn's offered titles, not just the raw message — into one of five intents (D037 added `suggest`):
 
-- **`explore`** — new recommendations (today's default pipeline: Retrieval → Recommendation → Path Planning)
+- **`suggest`** — pure interest/strength-sharing with no explicit ask and no uncertainty signal ("I like gaming and reading"). A short, lightweight reply naming 2-4 career/major directions — no full recommendation detail, no colleges yet, no `RecommendationAgent`/Path Planning call. Never fires on a genuinely first message (enforced in code, not just prompt wording) — a first-time visitor typically wants to see real options quickly, so a first message always goes to `explore` even if it's pure interest-sharing
+- **`explore`** — new recommendations: either an explicit ask, or interests paired with uncertainty ("I don't know what career I want," "I don't know if college is right for me") — that's a real request for guidance, just phrased indirectly (today's default pipeline: Retrieval → Recommendation → Path Planning)
 - **`roadmap`** — a plan for something already offered, named exactly or implicitly ("that one", "the same one"). Recommendations are reused verbatim (nothing about them was wrong); only a fresh roadmap is generated, anchored to the resolved item
 - **`related_topic`** — more information (career or college) tied to an established anchor, e.g. "colleges for same." Retrieval and Recommendation still run, but grounded by the resolved anchor's title/type instead of guessing blind from an ambiguous message
 - **`general_chat`** — a genuine question outside the recommendation flow (FAFSA, essay advice, term definitions). Answered directly and conversationally — grounded by RAG when the knowledge base is actually relevant, but never forced into the structured recommendation JSON shape. No Recommendation or Path Planning call at all
 
-An anchor resolved with low confidence, or that doesn't match anything actually offered last turn, falls back to `explore` rather than guessing — see `IntentRouterAgent._validate()`. Guardrail and RASCEF evaluation run on every intent, unmodified in scope; only the generation work differs. `last_recommendations` is left untouched after a `general_chat` turn, so a side question mid-conversation doesn't erase the ability to refer back to what was being discussed.
+An anchor resolved with low confidence, or that doesn't match anything actually offered last turn, falls back to `explore` rather than guessing — see `IntentRouterAgent._validate()`. Guardrail and RASCEF evaluation run on every intent, unmodified in scope; only the generation work differs. `last_recommendations` is left untouched after a `general_chat` or `suggest` turn, so a side question or a lightweight reply mid-conversation doesn't erase the ability to refer back to what was being discussed.
 
 This replaces the old `_match_previous_choice()` (D028) outright: that mechanism could only recognize an *exact, literal* title mention in the message, with zero visibility into conversation history — it had no way to resolve "same," "that one," or any other implicit reference, which is exactly the failure mode that motivated D034.
+
+Chat also surfaces clickable next-step chips (decision D037) matched to the resolved intent: a `suggest` reply offers "Show me career choices" / "Show me major options"; an `explore`/`roadmap` reply anchored to a career or major (not already a college) offers "Show me college options for `<X>`." Clicking one feeds that exact text through the same message-handling path as typing it.
 
 ---
 

@@ -259,7 +259,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 4. Intent Router Agent
 
-**Responsibility:** Classifies each turn into one of four intents so the orchestrator can route to the right amount of work instead of forcing every message through the same "generate new recommendations" pipeline (decision D034). Replaces the old literal-title-only `_match_previous_choice()` (decision D028): that mechanism could only recognize an *exact* title mention with zero visibility into conversation history, so it had no way to resolve an implicit reference like "same" or "that one" — exactly the failure mode that motivated this agent.
+**Responsibility:** Classifies each turn into one of five intents so the orchestrator can route to the right amount of work instead of forcing every message through the same "generate new recommendations" pipeline (decision D034, "suggest" added in D037). Replaces the old literal-title-only `_match_previous_choice()` (decision D028): that mechanism could only recognize an *exact* title mention with zero visibility into conversation history, so it had no way to resolve an implicit reference like "same" or "that one" — exactly the failure mode that motivated this agent.
 
 **When called:** Concurrently with Discovery Agent, not after it — both depend only on memory load's output (the pre-turn profile's `last_recommendations` and recent conversation history), not on each other.
 
@@ -278,12 +278,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 | Intent | Meaning | Downstream effect |
 |---|---|---|
-| `explore` | New recommendations, or no prior context to anchor to | Today's full pipeline: Retrieval → Recommendation → Path Planning |
+| `suggest` | Pure interest/strength-sharing, no explicit ask, no uncertainty signal (decision D037) | A short, lightweight reply naming 2-4 career/major directions - no `RecommendationAgent` call, no Path Planning, no colleges mentioned yet |
+| `explore` | An explicit ask for options, uncertainty-seeking-direction language ("I don't know what career I want"), or no prior context to anchor to | Today's full pipeline: Retrieval → Recommendation → Path Planning |
 | `roadmap` | A plan for something already offered, named exactly or implicitly ("that one", "the same one") | Recommendation is skipped - last turn's items are reused verbatim; Path Planning anchors to the resolved item |
 | `related_topic` | More career/college information tied to an established anchor (e.g. "colleges for same") | Retrieval and Recommendation still run, grounded by `anchor_title`/type instead of guessing blind |
 | `general_chat` | A genuine question outside the recommendation flow (FAFSA, essay advice, term definitions) | A direct conversational answer - no Recommendation, no Path Planning call at all |
 
-**Validation rules (`_validate()`):** an unparseable response, an invalid `intent` value, or (for `roadmap`/`related_topic`) an `anchor_title` that doesn't exactly match a title actually offered last turn all fall back to `{"intent": "explore", "anchor_title": None}` - the same full-pipeline behavior the turn would have gotten without this agent, so a bad classification degrades safely rather than acting on a hallucinated anchor. If no recommendations were offered last turn, `anchor_title` is always `None` and `intent` can only resolve to `explore` or `general_chat`.
+**Validation rules (`_validate()`):** an unparseable response, an invalid `intent` value, or (for `roadmap`/`related_topic`) an `anchor_title` that doesn't exactly match a title actually offered last turn all fall back to `{"intent": "explore", "anchor_title": None}` - the same full-pipeline behavior the turn would have gotten without this agent, so a bad classification degrades safely rather than acting on a hallucinated anchor. If no recommendations were offered last turn, `anchor_title` is always `None` and `intent` can only resolve to `suggest`, `explore`, or `general_chat`. `suggest` is additionally forced to `explore` whenever there is no prior conversation at all (`is_first_message=True`) - a code-level rule added after the prompt's own judgment broke the capstone's own scripted live-demo line by routing a genuinely first message to a lightweight reply instead of the full pipeline that demo depends on.
 
 **Failure behavior:** Same fallback as above - any exception or malformed model output resolves to `explore`, never a crash.
 

@@ -111,11 +111,11 @@ At-a-glance version of what's fully detailed in `docs/09_Agent_Contracts.md`. "E
 | Orchestrator | Runs the fixed per-turn pipeline; applies the one-retry critic/revision loop | `student_name`, `user_message` | Full turn result (response, recommendations, path plan, scores, trace) | Each stage degrades independently (no single global try/except); guardrail/evaluation notes appended rather than blocking; logging failures swallowed | None directly — delegates to every agent below |
 | Input Guardrail Agent | Pre-generation rule-based check (profanity / frustration / prompt-injection); blocks the turn on `prompt_injection_detected` only, profanity/frustration stay detection-only | `user_message` | `{flags, passed}` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
 | Memory Agent | Load, merge, and persist student profile + conversation history | `student_name`, profile updates, message content | Profile dict, `recent_messages`, `session_number` | SQLite unavailable → empty in-memory profile for that turn; saves become no-ops rather than raising | SQLite (via repositories) |
-| Intent Router Agent | Classify the turn (explore/roadmap/related_topic/general_chat) and resolve implicit references ("same") against last turn's offered items, using real conversation history (decision D034) | `user_message`, `recent_messages`, `last_recommendations` | `{intent, anchor_title, reasoning}` | Unparseable output, invalid intent, or an anchor_title not actually in last turn's list → falls back to `explore` rather than acting on a bad classification | OpenAI (`gpt-4o-mini` via `LLMService`); optional LangSmith trace |
+| Intent Router Agent | Classify the turn (suggest/explore/roadmap/related_topic/general_chat) and resolve implicit references ("same") against last turn's offered items, using real conversation history (decision D034, "suggest" added in D037) | `user_message`, `recent_messages`, `last_recommendations` | `{intent, anchor_title, reasoning}` | Unparseable output, invalid intent, or an anchor_title not actually in last turn's list → falls back to `explore` rather than acting on a bad classification | OpenAI (`gpt-4o-mini` via `LLMService`); optional LangSmith trace |
 | Discovery Agent | Extract profile fields from the latest message only; never invents GPA/grade | `student_name`, `user_message`, `existing_profile` | `student_profile_updates`, `confidence`, `missing_information`, `next_question` | Low-confidence/failed extraction → returns the existing profile unchanged plus a safe open-ended fallback question | OpenAI (`gpt-4o-mini` via `LLMService`); optional LangSmith trace |
 | Retrieval Agent | Semantic search over the knowledge base; college results are state-filtered from `location_preference` and budget-boosted from `budget_preference` (decision D033); skipped entirely for "roadmap" intent, anchor-grounded for "related_topic" (decision D034) | `user_message`, `profile`, `top_k`, `anchor_context` | `query`, `retrieved_documents`, `retrieval_confidence` | Pinecone unreachable → transparent fallback to local tag-match search over the same JSON files | OpenAI (embeddings), Pinecone; optional LangSmith trace |
-| Recommendation Agent | Generate 3–5 grounded career/major/college recommendations; skipped for "roadmap" (reused verbatim) and "general_chat" (decision D034); `anchor_context` grounds "related_topic" follow-ups | `user_message`, `profile`, `retrieved_context`, `anchor_context` | `recommendations[]`, `summary`, `follow_up_question` | Invalid/unusable model JSON → safe fallback response built from retrieved document titles instead of crashing | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
-| Path Planning Agent | Turn one selected recommendation into a phased roadmap; skipped for "general_chat" (decision D034) | `profile`, `recommendations`, `selected_override` | `selected_path`, `source`, short/medium/long-term steps, skills, projects | Unusable output or nothing to plan around → generic 3-step fallback roadmap | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
+| Recommendation Agent | Generate 3–5 grounded career/major/college recommendations; skipped for "roadmap" (reused verbatim), "general_chat", and "suggest" (decisions D034, D037); `anchor_context` grounds "related_topic" follow-ups | `user_message`, `profile`, `retrieved_context`, `anchor_context` | `recommendations[]`, `summary`, `follow_up_question` | Invalid/unusable model JSON → safe fallback response built from retrieved document titles instead of crashing | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
+| Path Planning Agent | Turn one selected recommendation into a phased roadmap; skipped for "general_chat" and "suggest" (decisions D034, D037) | `profile`, `recommendations`, `selected_override` | `selected_path`, `source`, short/medium/long-term steps, skills, projects | Unusable output or nothing to plan around → generic 3-step fallback roadmap | OpenAI (`gpt-4o-mini`); optional LangSmith trace |
 | Guardrail Agent | Post-generation rule-based safety check (10 flags) | `response_payload`, `profile`, `user_message` | `passed`, `flags`, `risk_level`, `required_revisions` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
 | Evaluation Agent | RASCEF quality scoring — LLM-as-judge with a rule-based fallback | `user_message`, `response_payload`, `retrieved_context`, `profile`, `guardrail_result` | `scores`, `total_score`, `quality_badge`, `feedback`, `requires_revision` | Judge call fails → rule-based fallback (capped at `amber`); both fail → `not_evaluated` with zeroed scores, never a crash | OpenAI (`gpt-4o`); optional LangSmith trace |
 | Observability Agent | Persist one log row per turn, including real per-model cost | Event dict (models, token usage, flags, scores, latency) | `log_id` (or `None` on failure) | Write failure swallowed at both the agent and the orchestrator call site — never blocks the response | SQLite |
@@ -297,11 +297,13 @@ Resolve anchor_title against current_profile["last_recommendations"] (decision D
   └── not found (or intent was "roadmap"/"related_topic" with nothing to anchor to) → intent falls back to "explore"
         │
         ▼
-Branch on intent:
+Branch on intent (decision D034, "suggest" added in D037):
   ├── "roadmap" → skip Retrieval + RecommendationAgent entirely; reuse last_recommendations verbatim
   │     └── PathPlanningAgent.generate_path_plan(profile, recommendations, selected_override=anchor_item)
   ├── "general_chat" → RetrievalAgent runs (no anchor) if relevant; RecommendationAgent/PathPlanningAgent skipped
   │     └── orchestrator._generate_general_chat_response(...) — LLMService.generate_text(...), plain-text answer
+  ├── "suggest" → RetrievalAgent runs (no anchor); RecommendationAgent/PathPlanningAgent skipped
+  │     └── orchestrator._generate_suggestions_response(...) — short reply, career/major directions only, no colleges
   └── "explore" / "related_topic" → today's pipeline, "related_topic" adds anchor_context as extra grounding
         RetrievalAgent.retrieve_relevant_context(user_message, profile, top_k=5, anchor_context)
           └── RetrievalService.search_non_colleges(query)  (careers/majors/interests, unfiltered blend)
@@ -320,20 +322,21 @@ Branch on intent:
         ▼
 GuardrailAgent.check_guardrails(response_payload, profile, user_message)
   └── Rule-based checks — no LLM call — response gets a safe/limitations note appended if flagged
-  └── Runs regardless of intent, including "general_chat" (empty recommendations/path_plan handled gracefully)
+  └── Runs regardless of intent, including "general_chat"/"suggest" (empty recommendations/path_plan handled gracefully)
         │
         ▼
 EvaluationAgent.evaluate(user_message, response_payload, retrieved_context, profile, guardrail_result,
                           input_guardrail_flags, revision_attempted, is_general_chat)
   └── EvaluationService.evaluate_with_llm_judge(...)  (via OpenAIClient, gpt-4o) — RASCEF scores
-  └── is_general_chat=True: judge scores completeness/explainability on answer substance, not recommendation shape
+  └── is_general_chat=True (set for both "general_chat" and "suggest" - decision D037): judge scores
+      completeness/explainability on answer substance, not recommendation shape
   └── falls back to EvaluationService.evaluate_rule_based(...) if the judge call fails
   └── traces to LangSmith if configured (prompt versions, score, badge, guardrail + input guardrail flags, revision_attempted)
         │
         ▼
 Critic / revision loop — at most one retry (decision D023)
   └── if requires_revision (total_score < 24): re-run the same branch that ran above once more
-      (roadmap re-runs only PathPlanningAgent; general_chat re-runs only the answer call;
+      (roadmap re-runs only PathPlanningAgent; general_chat/suggest re-run only the answer call;
       explore/related_topic re-run RecommendationAgent → PathPlanningAgent), reusing retrieved_context,
       then GuardrailAgent → EvaluationAgent again
   └── response gets a "needs more info" note appended if still requires_revision after the retry

@@ -1,4 +1,5 @@
 import datetime
+import re
 from pathlib import Path
 
 import streamlit as st
@@ -413,10 +414,21 @@ def _render_assistant_response(result: dict) -> None:
     recommendations = result.get("recommendations", [])
     path_plan = result.get("path_plan", {})
 
-    intro = f"Thanks, {student_name}!" if student_name else "Thanks!"
-    if summary:
-        intro = f"{intro} {summary}"
-    st.write(intro)
+    if recommendations:
+        # "explore"/"related_topic": result["response"] is the full item-by-item text
+        # version of what the cards below already show - a short "Thanks, X! {summary}"
+        # teaser here avoids showing the same content twice in two formats.
+        intro = f"Thanks, {student_name}!" if student_name else "Thanks!"
+        if summary:
+            intro = f"{intro} {summary}"
+        st.write(intro)
+    else:
+        # "general_chat"/"suggest"/"roadmap": there are no cards to carry the substance,
+        # so result["response"] IS the actual answer - showing "Thanks, X!" alone here
+        # silently dropped the entire generated response (caught live in the browser
+        # testing a general_chat turn - the exact shape of the original bug report).
+        response_text = (result.get("response") or "").strip()
+        st.write(response_text or (f"Thanks, {student_name}!" if student_name else "Thanks!"))
 
     _render_recommendations(recommendations)
 
@@ -434,6 +446,60 @@ def _render_assistant_response(result: dict) -> None:
         _render_trace(result)
 
 
+_TRAILING_TYPE_SUFFIX = re.compile(r"\s*\([a-z_]+\)\s*$", re.IGNORECASE)
+
+
+def _set_pending_message(text: str) -> None:
+    st.session_state.pending_message = text
+
+
+def _render_next_step_chips(result: dict) -> None:
+    """
+    Clickable next-step suggestions (decision D037) - only for the turn that was just
+    generated, not re-rendered for older history, so a stale action never lingers once
+    the conversation has moved on. "suggest" turns offer to go deeper (careers or majors);
+    an "explore"/"roadmap" turn anchored to a career or major (not already a college)
+    offers to see colleges for it next - the natural progression the intent-routing
+    system already supports end to end (college suggestions land as "related_topic").
+    """
+    intent = result.get("intent")
+    if intent == "suggest":
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button(
+                "Show me career choices", key="chip_career_choices", width="stretch",
+                on_click=_set_pending_message, args=("Show me career choices",),
+            )
+        with col2:
+            st.button(
+                "Show me major options", key="chip_major_options", width="stretch",
+                on_click=_set_pending_message, args=("Show me major options",),
+            )
+    elif intent in ("explore", "roadmap"):
+        path_plan = result.get("path_plan") or {}
+        selected_path = (path_plan.get("selected_path") or "").strip()
+        if not selected_path:
+            return
+        # PathPlanningAgent's own selected_path occasionally echoes a "(type)" suffix back
+        # (the same formatting slip decision D035 found and fixed in the intent router's
+        # anchor_title) - stripped before the title match below, so a college whose
+        # selected_path came back as "X (college_pathway)" is still correctly recognized
+        # as already-a-college instead of matching nothing and showing a redundant chip.
+        selected_path = _TRAILING_TYPE_SUFFIX.sub("", selected_path).strip()
+        selected_type = ""
+        for item in result.get("recommendations", []):
+            if item.get("title") == selected_path:
+                selected_type = str(item.get("type", "")).lower()
+                break
+        if selected_type not in ("college", "college_pathway"):
+            st.button(
+                f"Show me college options for {selected_path}",
+                key="chip_college_options",
+                on_click=_set_pending_message,
+                args=(f"What colleges would be good for {selected_path}?",),
+            )
+
+
 st.html(_COMPACT_CHAT_CSS)
 
 # --- Session state ---
@@ -443,6 +509,8 @@ if "student_name" not in st.session_state:
     st.session_state.student_name = ""
 if "history_loaded_for" not in st.session_state:
     st.session_state.history_loaded_for = None
+if "pending_message" not in st.session_state:
+    st.session_state.pending_message = None
 
 # --- Restore a returning student's past conversation, once per name. Skipped after an
 # explicit "New conversation" click, and re-triggered if the name changes. ---
@@ -498,8 +566,12 @@ for msg in st.session_state.messages:
         else:
             st.write(msg["content"])
 
-# Handle new message
+# Handle new message - a clicked next-step chip (decision D037) is treated identically
+# to typed input, consumed once so it doesn't resubmit on a later, unrelated rerun.
 user_message = st.chat_input("Ask PathFinder AI anything about careers, majors, or college pathways...")
+if not user_message and st.session_state.pending_message:
+    user_message = st.session_state.pending_message
+    st.session_state.pending_message = None
 
 if user_message and not _current_name:
     st.warning("Please enter your name above before starting a conversation.", icon=":material/person:")
@@ -525,6 +597,7 @@ elif user_message:
         with header_placeholder.container():
             _render_message_header(DISPLAY_NAMES["assistant"], _format_timestamp(assistant_timestamp))
         _render_assistant_response(result)
+        _render_next_step_chips(result)
 
     st.session_state.messages.append({
         "role": "assistant",

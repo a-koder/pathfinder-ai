@@ -72,6 +72,27 @@ def _infer_state_code(location_preference: str) -> str | None:
     return None
 
 
+_PROFILE_CONTEXT_FIELDS = ("interests", "strengths", "favorite_careers", "career_preferences")
+
+
+def _build_profile_context(profile: dict) -> str:
+    """Folds what's already known about the student (interests, strengths, favorite
+    careers) into the retrieval query, not just the current message's literal wording.
+    Without this, a topically-thin follow-up like "give me career choices" - which states
+    an intent but repeats none of the student's actual interests - retrieves nearly at
+    random, since the embedding search has almost nothing to match against. Discovery
+    accumulates these fields turn over turn specifically so later turns don't have to
+    restate them (decision D037 surfaced this gap: splitting "share interests" (suggest)
+    from "ask for options" (explore) into separate turns made it much more visible, but
+    the gap predates that split - explore's retrieval query was always message-only)."""
+    parts = []
+    for field in _PROFILE_CONTEXT_FIELDS:
+        values = profile.get(field) or []
+        if values:
+            parts.append(", ".join(str(v) for v in values))
+    return "; ".join(parts)
+
+
 def _wants_affordability(budget_preference: str) -> bool:
     if not budget_preference:
         return False
@@ -125,15 +146,18 @@ class RetrievalAgent:
         usage: UsageTracker | None = None,
     ) -> dict:
         """Runs a non-college search plus a location/budget-aware college search and
-        returns a RetrievalOutput-shaped dict. `anchor_context` (e.g. "Mental Health
-        Counselor (career)") is used by the intent router's related_topic flow to ground
-        an ambiguous follow-up ("colleges for same") in what it actually refers to - it's
-        folded into the embedding search text only, never into the displayed `query`
-        field, so the turn's record of what the student literally asked stays accurate."""
+        returns a RetrievalOutput-shaped dict. The embedding search text folds in the
+        student's already-known interests/strengths/favorite careers (not just the literal
+        current message - decision D037) plus `anchor_context` (e.g. "Mental Health
+        Counselor (career)") when the intent router's related_topic flow needs to ground
+        an ambiguous follow-up ("colleges for same") in what it actually refers to. Neither
+        is folded into the displayed `query` field, so the turn's record of what the
+        student literally asked stays accurate."""
         profile = profile or {}
         state = _infer_state_code(profile.get("location_preference", ""))
         budget_preference = profile.get("budget_preference", "")
-        search_text = f"{user_message} {anchor_context}".strip() if anchor_context else user_message
+        profile_context = _build_profile_context(profile)
+        search_text = " ".join(part for part in (user_message, profile_context, anchor_context) if part)
 
         college_slots = min(_MAX_COLLEGE_SLOTS, top_k)
         non_college_slots = top_k - college_slots
