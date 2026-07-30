@@ -8,6 +8,18 @@ This document defines the input/output shapes for every agent in PathFinder AI. 
 
 ---
 
+## Agent Persona
+
+The system doesn't just return structured data — the `response` text a student actually reads has a deliberate voice, set in `src/prompts/recommendation/v1.md`:
+
+- **Name:** PathFinder
+- **Tone:** Warm, encouraging, honest, and practical — like a counselor who already knows the student, not a search engine reading off a list
+- **Rules that hold across every response:** never guarantee admission, salary, or job security; always include at least one less-obvious option alongside familiar ones when the data supports it; end with one follow-up question, never several at once
+
+This shows up directly in the demo — the difference between "Data Analyst: high-paying field with strong job security" (a claim the guardrails would catch) and "Data Analyst: turns raw numbers into decisions that change how hospitals and governments operate" (grounded, exciting, and something the model is actually allowed to say) is this persona doing its job.
+
+---
+
 ## Prompt Governance
 
 Every LLM-facing prompt is externalized and versioned (decision D020) — none are hardcoded in agent code anymore.
@@ -144,7 +156,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 - A guardrail `risk_level: high` gets a fixed safe note appended to the response (never returned unmodified); `medium` gets a "keep in mind" limitations note built from `required_revisions`.
 - If `evaluation.requires_revision` is still true after the critic/revision retry (see above), a short note is appended asking the student to share more profile detail.
 - Logging failures (`observability.log_turn()`) are swallowed at both the agent and orchestrator call site — a broken log write never breaks the response; `observability_log_id` is simply `None` in that case, and the feedback buttons don't render.
-- Retrieval, LLM generation, and profile persistence each degrade independently (see `docs/10_Error_Handling_and_Fallbacks.md`); there is no single global exception handler around the whole turn today — each stage is responsible for its own safe fallback.
+- Retrieval, LLM generation, and profile persistence each degrade independently (see the Retrieval Agent, Recommendation Agent, and Memory Agent sections below for each one's specific fallback); there is no single global exception handler around the whole turn today — each stage is responsible for its own safe fallback.
 
 ---
 
@@ -422,7 +434,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Orchestrator behavior on the result:** `risk_level: high` → a fixed safe note is appended to the response ("...Final college or career decisions should be discussed with a counselor, parent, or trusted advisor."). `risk_level: medium` → a "Keep in mind: ..." note built from `required_revisions` is appended. `low` → response returned unmodified.
 
-**Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail. An unhandled exception here would propagate to the orchestrator like any other agent failure (see `docs/10_Error_Handling_and_Fallbacks.md`).
+**Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail.
 
 **Ruleset:** `src/prompts/guardrail/v1.yaml`, loaded via `PromptLoader.load_ruleset()` (see Prompt Governance above). All 10 flags' phrases, keywords, connectors/traits, risk levels, and revision text live in this file — `guardrail_agent.py` contains only the matching logic, no hardcoded phrase lists.
 

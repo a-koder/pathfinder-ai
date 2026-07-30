@@ -493,17 +493,17 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation · Age
 | 1. Title | — | `01_welcome_screen.jpg` (optional, if you want the app visible behind the title) |
 | 4. Architecture | `docs/04_Architecture.md`'s 6-layer diagram (text block) | `10_architecture_at_a_glance.jpg` |
 | 5. Agent Flow | `docs/08_Diagrams.md` → "At a Glance" flowchart | `10_architecture_at_a_glance.jpg` (same image, used again) |
-| 6. RAG + Grounding | `docs/08_Diagrams.md` → Section 4, RAG Pipeline Diagram | `05_retrieved_docs_recommendations_profile.jpg` (shows real retrieval scores) |
-| 7. Responsible AI | `docs/08_Diagrams.md` → Section 7, Guardrail and Evaluation Flow | `08_scenario2_guardrail_note_amber.jpg` |
-| 8. Prompt Governance + Observability | `docs/08_Diagrams.md` → Section 9, Prompt Governance Architecture | `06_rascef_evaluation_score.jpg` |
-| 9. Key Capabilities | `docs/08_Diagrams.md` → Section 6, Agent Responsibility Diagram (optional) | `09_scenario3_returning_student_memory.jpg` |
-| 10. AI Concepts, Named | `docs/07_Capstone_Mapping_and_Implementation_Plan.md` § 13 (source table for this slide) | — |
+| 6. RAG + Grounding | `docs/08_Diagrams.md` → Section 2, RAG Pipeline Diagram | `05_retrieved_docs_recommendations_profile.jpg` (shows real retrieval scores) |
+| 7. Responsible AI | `docs/08_Diagrams.md` → Section 4, Guardrail and Evaluation Flow | `08_scenario2_guardrail_note_amber.jpg` |
+| 8. Prompt Governance + Observability | `docs/08_Diagrams.md` → Section 6, Prompt Governance Architecture | `06_rascef_evaluation_score.jpg` |
+| 9. Key Capabilities | Appendix E — Agent Roster (below) or `docs/09_Agent_Contracts.md`'s Agent Roster table (optional) | `09_scenario3_returning_student_memory.jpg` |
+| 10. AI Concepts, Named | `docs/07_Capstone_Requirements_Mapping.md`'s "Final Capstone Story" table (source for this slide) | — |
 | 11. Live Demo | — | `02_scenario1_recommendations.jpg` / `03_scenario1_roadmap_funfacts.jpg` (backup stills if live demo has trouble) |
 | 12. Results | `docs/12_DECISION_LOG.md` (point to it, don't screenshot it) | — |
 | 13. Rubric Coverage | `docs/25_Capstone_Review.md`'s rubric table (source for this slide) | — (data table, no image needed) |
 | 14. Evaluation Framework | — | — (data slide; sample scores are from this session's `test_full_workflow.py` run) |
 | 15. Continuous Improvement Loop | — | — (data slide; scores are from `test_revision_loop.py`'s scripted cases) |
-| 16. Operationalization | `docs/10_Error_Handling_and_Fallbacks.md` (failure modes table) | — (data slide, no image needed) |
+| 16. Operationalization | `docs/09_Agent_Contracts.md` (per-agent "Failure behavior" entries) | — (data slide, no image needed) |
 
 All diagrams referenced above already exist in `docs/08_Diagrams.md` / `docs/04_Architecture.md` — reuse them directly (e.g. re-export the relevant Mermaid block to PNG) rather than redrawing anything.
 

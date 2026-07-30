@@ -80,18 +80,18 @@ conversation (confirmed in `docs/09_Agent_Contracts.md`'s Memory Agent note and
 isn't a bug so much as an unfinished loop: the check exists, the data source doesn't.
 
 **No `out_of_scope` guardrail.** Scholarship, FAFSA, SAT/ACT, and essay-review questions are
-explicitly out of MVP scope per `docs/01_Vision.md`, but nothing actually intercepts them —
-they reach the Recommendation Agent, which will attempt a weak, ungrounded answer rather than
-redirecting. Documented as a known gap in `docs/04_Architecture.md`, not hidden, but worth
-surfacing directly since "guardrails cover scope" is an easy claim to overstate.
+explicitly out of MVP scope per `docs/01_Product_Overview.md`, but nothing actually intercepts
+them — they reach the Recommendation Agent, which will attempt a weak, ungrounded answer
+rather than redirecting. Documented as a known gap in `docs/04_Architecture.md`, not hidden,
+but worth surfacing directly since "guardrails cover scope" is an easy claim to overstate.
 
-**`docs/10_Error_Handling_and_Fallbacks.md` is partially aspirational, not verified.** Direct
-code check during this review: `openai_client.py` has no retry logic at all (the doc claims
-"retry up to 2 times with 2s backoff"), and `has_openai_key()`/`has_pinecone_key()` are only
-ever called from `src/scripts/`, never from `app.py` — the documented "config warning at
-startup" doesn't exist in the running app. This is a real doc/code gap, not previously flagged
-anywhere else in the docs, and worth fixing or explicitly caveating before anyone treats that
-document as ground truth.
+**A doc that no longer matched the code got deleted, not patched.** `docs/10_Error_Handling_and_Fallbacks.md`
+used to claim OpenAI-call retries with backoff and a startup config-check banner that never
+actually existed in `src/` — confirmed by direct code check: `openai_client.py` has no retry
+logic at all, and `has_openai_key()`/`has_pinecone_key()` are only ever called from
+`src/scripts/`, never from `app.py`. Rather than leave a doc making false claims about the
+system's resilience, it was removed during documentation cleanup. Worth remembering: a
+missing doc about error handling is more honest than a wrong one.
 
 **No production-readiness path.** Name-based student "authentication" (case-insensitive
 lookup, no password, no session security), single-machine SQLite, no deployment target — all
@@ -153,6 +153,7 @@ checks that can't actually fire yet. Both are fixable without new agents or a re
    review. "No CI yet" is a materially different statement than "untested."
 5. **Use the cost-tracking story (D019 → D029) as a concrete example of shipping scaffolding
    honestly, then finishing it** — it's a good answer to "how do you handle technical debt?"
-6. **If asked about `docs/10_Error_Handling_and_Fallbacks.md`'s retry/config-check claims**,
-   don't defend them — they don't match the current code, and saying so directly is stronger
-   than being caught by a follow-up question that reads the file.
+6. **If asked why there's no dedicated error-handling doc**, say so directly: an earlier draft
+   claimed retry logic and a startup config check that never actually existed in the code, so
+   it was removed rather than left to mislead a reviewer. Real failure handling is documented
+   agent-by-agent in `docs/09_Agent_Contracts.md`'s "Failure behavior" entries instead.
