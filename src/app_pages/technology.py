@@ -5,7 +5,7 @@ from ui_shared import render_header, render_doc_tabs
 # prompts are versioned and governed.
 _SECTIONS = [
     ("RAG Design", "13_RAG_Implementation.md"),
-    ("Prompt Governance", "99_REFERENCE.md"),
+    ("Prompt Governance", "09_Agent_Contracts.md"),
 ]
 
 render_header()
