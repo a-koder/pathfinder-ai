@@ -500,7 +500,7 @@ Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation · Age
 | 10. AI Concepts, Named | `docs/07_Capstone_Requirements_Mapping.md`'s "Final Capstone Story" table (source for this slide) | — |
 | 11. Live Demo | — | `02_scenario1_recommendations.jpg` / `03_scenario1_roadmap_funfacts.jpg` (backup stills if live demo has trouble) |
 | 12. Results | `docs/12_DECISION_LOG.md` (point to it, don't screenshot it) | — |
-| 13. Rubric Coverage | `docs/25_Capstone_Review.md`'s rubric table (source for this slide) | — (data table, no image needed) |
+| 13. Rubric Coverage | — (original to this slide) | — (data table, no image needed) |
 | 14. Evaluation Framework | — | — (data slide; sample scores are from this session's `test_full_workflow.py` run) |
 | 15. Continuous Improvement Loop | — | — (data slide; scores are from `test_revision_loop.py`'s scripted cases) |
 | 16. Operationalization | `docs/09_Agent_Contracts.md` (per-agent "Failure behavior" entries) | — (data slide, no image needed) |
@@ -542,7 +542,7 @@ Rough timing at the pacing implied by the speaker notes above: ~9 minutes for sl
 
 **If you need to cut something, in this order:**
 
-1. **Skip Slides 13–16 (Rubric Coverage → Operationalization) entirely in a timed 10-minute talk.** They're written for asynchronous rubric review, not stage time — Slide 12 (Where It Stands) already covers the honest-numbers beat in one slide for a live audience, and the full detail lives in `docs/25_Capstone_Review.md` for anyone grading afterward. Jump straight from Slide 12 to Slide 17 (What's Next). Saves ~4 minutes — by far the largest single time recovery available, and the first thing to cut, not the last.
+1. **Skip Slides 13–16 (Rubric Coverage → Operationalization) entirely in a timed 10-minute talk.** They're written for asynchronous rubric review, not stage time — Slide 12 (Where It Stands) already covers the honest-numbers beat in one slide for a live audience. Jump straight from Slide 12 to Slide 17 (What's Next). Saves ~4 minutes — by far the largest single time recovery available, and the first thing to cut, not the last.
 2. **Merge Slide 4 (Architecture) into Slide 5 (Agent Flow).** They're already telling one story at two zoom levels, and the "At a Glance" diagram (`10_architecture_at_a_glance.jpg`) already unifies both into one visual. Saves ~40–45 seconds with the least narrative loss of any cut available.
 3. **Cap the live demo at 2 scenarios, not 3.** Fold Scenario 3 into Scenario 1's natural conclusion — after showing the fresh discovery conversation, just reload and re-enter the same name to show instant recall, instead of treating it as a fully separate scripted scenario. Saves ~30–45 seconds.
 4. **Trim Slide 12 (Where It Stands) to its first two bullets only** (testing + RASCEF threshold), moving the decision-log count and the pytest-gap admission into the closing speaker notes as a spoken aside rather than an on-slide bullet.

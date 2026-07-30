@@ -38,6 +38,5 @@ need from the table below.
 | 13 | [`13_RAG_Implementation.md`](13_RAG_Implementation.md) | Full RAG design and ingestion detail |
 | 14 | [`14_Presentation_Deck.md`](14_Presentation_Deck.md) | Marp-flavored capstone slide deck, speaker notes, demo script |
 | 19 | [`19_Future_Vision.md`](19_Future_Vision.md) | Realistic next steps beyond the MVP, each tied to an existing extension point |
-| 25 | [`25_Capstone_Review.md`](25_Capstone_Review.md) | Honest self-assessment: strengths, weaknesses, gaps, rubric estimate |
 
 **Numbering gaps:** reserved, unused. Not a sign of missing docs — just room for future additions without renumbering anything.

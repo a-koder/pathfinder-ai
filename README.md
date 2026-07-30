@@ -329,5 +329,4 @@ evaluation, observability, roadmap, and more): **[`docs/README.md`](docs/README.
 Highlights: the capstone-to-code mapping and full pattern list live in
 [`docs/07_Capstone_Requirements_Mapping.md`](docs/07_Capstone_Requirements_Mapping.md);
 the presentation deck is [`docs/14_Presentation_Deck.md`](docs/14_Presentation_Deck.md); what's
-next beyond this MVP is [`docs/19_Future_Vision.md`](docs/19_Future_Vision.md); an honest
-strengths/weaknesses/gaps self-assessment is [`docs/25_Capstone_Review.md`](docs/25_Capstone_Review.md).
+next beyond this MVP is [`docs/19_Future_Vision.md`](docs/19_Future_Vision.md).
