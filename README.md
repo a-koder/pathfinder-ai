@@ -269,7 +269,16 @@ Linux/WSL uses `.venv_linux` the same way; reserved for non-Windows work, not us
 ```powershell
 copy .env.example .env
 ```
-Fill in `OPENAI_API_KEY` and `PINECONE_API_KEY` in `.env`. LangSmith variables are optional (see LangSmith above).
+Then fill in `.env`:
+
+| Variable | Required | Where to get it |
+|---|---|---|
+| `OPENAI_API_KEY` | Yes — used for generation, evaluation, and embeddings | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `PINECONE_API_KEY` | Yes — used for retrieval | [app.pinecone.io](https://app.pinecone.io) (free tier is enough for this project) |
+| `PINECONE_INDEX_NAME` | No — defaults to `pathfinder-ai` | Only change this if you want a different index name |
+| `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` | No — see LangSmith below | [smith.langchain.com](https://smith.langchain.com) |
+
+The app runs fully without LangSmith configured.
 
 **3. Populate Pinecone (first run only, or after editing `data/*.json`):**
 ```powershell
