@@ -9,7 +9,6 @@ flowchart LR
     S["Student"] --> UI["Chat UI"]
     UI --> ORC["Orchestrator"]
     ORC --> STEPS
-
     subgraph STEPS ["One turn, in order"]
         direction LR
         IGA["Input\nGuardrail"] --> MEM["Memory\n(load)"]
@@ -20,7 +19,6 @@ flowchart LR
         PLAN --> GRD["Guardrail\n(safety check)"]
         GRD --> EVAL["Evaluation\n(RASCEF score)"]
     end
-
     STEPS --> UI
 ```
 
@@ -50,21 +48,16 @@ sequenceDiagram
     participant EA as Evaluation Agent
     participant OL as Observability Logger
     participant LS as LangSmith (optional)
-
     S->>UI: Sends message
     UI->>ORC: Forwards message + session state
-
     ORC->>IGA: Check raw message (profanity / frustration / prompt injection)
     IGA-->>ORC: Flags (profanity/frustration detection only; prompt_injection blocks)
-
     ORC->>MA: Load student profile and conversation summary
     MA-->>ORC: Profile JSON + last 20 messages
-
     opt prompt_injection_detected fired
         ORC-->>UI: Return fixed safe response immediately - no LLM call, $0.00
         Note over ORC: Discovery/Intent Router/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation all skipped
     end
-
     par Discovery and Intent Router run concurrently
         ORC->>DA: Update student understanding
         DA-->>ORC: Updated profile fields (interests, GPA, grade, location/budget preference)
@@ -72,12 +65,9 @@ sequenceDiagram
         ORC->>IRA: Classify intent (recent conversation + last turn's offered titles)
         IRA-->>ORC: intent (suggest/explore/roadmap/related_topic/general_chat) + anchor_title
     end
-
     ORC->>MA: Merge profile updates + persist
     MA-->>ORC: Merged profile
-
     Note over ORC: Resolve anchor_title against the merged profile's<br/>last_recommendations (decision D034). Falls back to<br/>"explore" if it can't be confidently resolved, or if<br/>"suggest" was returned with no prior conversation (D037).
-
     alt intent == roadmap
         Note over ORC: Skip Retrieval and Recommendation entirely -<br/>nothing new needs grounding.
         ORC->>PPA: Build roadmap around the resolved anchor item
@@ -106,14 +96,11 @@ sequenceDiagram
         ORC->>PPA: Build phased roadmap (top recommendation)
         PPA-->>ORC: Roadmap
     end
-
     ORC->>GA: Check response for unsafe claims
     GA-->>ORC: Guardrail flags (if any)
-
     ORC->>EA: Score response quality (RASCEF; general_chat/suggest scored on<br/>answer substance, not recommendation structure)
     EA-->>ORC: Dimension scores (out of 30)
     EA->>LS: Trace (prompt versions, score, badge, guardrail + input guardrail flags)
-
     alt total_score < 24 (critic / revision loop, max 1 retry)
         Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning; general_chat/suggest only retry the answer)
         ORC->>GA: Re-check response
@@ -122,21 +109,16 @@ sequenceDiagram
         EA-->>ORC: Final scores
         EA->>LS: Trace (revision_attempted: true)
     end
-
     opt intent not in (general_chat, suggest)
         ORC->>MA: Remember this turn's offered recommendations<br/>(for the next turn's intent routing)
         MA-->>ORC: Confirmed
     end
-
     ORC->>OL: Record latency, scores, flags, prompt versions
     OL-->>ORC: log_id
-
     ORC->>MA: Save message + update profile
     MA-->>ORC: Confirmed
-
     ORC->>UI: Return final response + trace + log_id
     UI->>S: Display response in chat
-
     opt Student rates the response
         S->>UI: 👍 / 👎
         UI->>ORC: submit_feedback(log_id, helpful)
@@ -160,13 +142,11 @@ flowchart LR
         DB["Document Builder\nFormat text for embedding"]
         EMB1["OpenAI text-embedding-3-small"]
         PI["Pinecone Index\nWith metadata: doc_type, title, tags, gpa_band"]
-
         C --> DB
         M --> DB
         CL --> DB
         DB --> EMB1 --> PI
     end
-
     subgraph Query ["Query Flow — Per Conversation Turn"]
         direction TB
         Q1["Student Question"]
@@ -176,7 +156,6 @@ flowchart LR
         PS["Pinecone Semantic Search\ntop-k with optional doc_type filter"]
         RC["Retrieved Context\nTop-k careers, majors, colleges"]
         LLM["GPT-4o-mini\nGenerates grounded response"]
-
         Q1 --> QB
         Q2 --> QB
         QB --> EMB2 --> PS --> RC --> LLM
@@ -200,7 +179,6 @@ erDiagram
         datetime last_seen_at
         int session_count
     }
-
     PROFILES {
         string student_id FK
         string grade_level
@@ -211,7 +189,6 @@ erDiagram
         string college_preferences_json
         datetime updated_at
     }
-
     MESSAGES {
         string message_id PK
         string student_id FK
@@ -219,14 +196,12 @@ erDiagram
         string content
         datetime created_at
     }
-
     CONVERSATION_SUMMARIES {
         string summary_id PK
         string student_id FK
         string summary
         datetime updated_at
     }
-
     OBSERVABILITY_LOGS {
         int log_id PK
         int student_id FK
@@ -243,7 +218,6 @@ erDiagram
         string feedback_text
         datetime timestamp
     }
-
     STUDENTS ||--|| PROFILES : "has one"
     STUDENTS ||--o{ MESSAGES : "sends many"
     STUDENTS ||--o{ CONVERSATION_SUMMARIES : "has many"
@@ -268,13 +242,11 @@ flowchart TD
     IG{"Input Guardrail\nprofanity / frustration /\nprompt-injection?"}
     BLOCKED["Fixed safe response returned\nNo LLM call - $0.00 cost\nIntent Router/Discovery/Retrieval/Recommendation/\nPath Planning/Guardrail/Evaluation all skipped"]
     GEN["Intent-routed generation (D034, suggest added D037):\nRecommendation + Path Planning (explore/related_topic),\nPath Planning only (roadmap, reused recs),\nor a direct answer (general_chat/suggest)"]
-
     subgraph Guardrails ["Output Guardrail — 10 Rule-Based Flags"]
         G1["High risk: admission_guarantee,\nsalary_guarantee, protected_attribute_bias"]
         G2["Medium risk: overconfidence, pressure_language,\nmissing_gpa/budget context, missing_grounding"]
         G3["Low risk: missing_location_for_college,\ninsufficient_profile"]
     end
-
     subgraph Evaluation ["RASCEF Evaluation Scoring — 6 Dimensions, 1-5 each"]
         E1["Relevance"]
         E2["Accuracy / groundedness"]
@@ -284,11 +256,9 @@ flowchart TD
         E6["Fairness"]
         TOTAL["Total Score out of 30"]
     end
-
     PASS["Pass — Score >= 24\nReturn response to student"]
     RETRY{"Score < 24?\nRevise once\n(max 1 retry)"}
     STILLLOW["Still < 24 after retry\nReturn anyway, with a\n'needs more info' note"]
-
     MSG --> IG
     IG -- "prompt_injection_detected" --> BLOCKED
     IG -- "profanity/frustration flags recorded, never blocks" --> GEN
@@ -298,7 +268,6 @@ flowchart TD
     G3 -- "low risk" --> Evaluation
     SAFENOTE --> Evaluation
     LIMNOTE --> Evaluation
-
     E1 & E2 & E3 & E4 & E5 & E6 --> TOTAL
     TOTAL --> RETRY
     RETRY -- "No" --> PASS
@@ -319,7 +288,6 @@ flowchart TD
 ```mermaid
 flowchart TD
     CALL["Each Conversation Turn\nOrchestrator.run_turn()"]
-
     subgraph Meta ["Captured Metadata"]
         M1["Model names\ngeneration / evaluation / embedding"]
         M2["Prompt versions\ndiscovery, recommendation, path_planning,\nrascef, guardrail, input_guardrail"]
@@ -331,11 +299,9 @@ flowchart TD
         M8["Evaluation score, quality badge,\nRASCEF dimension breakdown"]
         M9["revision_attempted\ntrue if the critic/revision retry fired"]
     end
-
     LOG["observability_logs Table\nOne row per turn, returns log_id"]
     LS["LangSmith\n(optional - same metadata, per evaluation call)"]
     HITL["HITL Feedback\n👍 / 👎 linked to log_id"]
-
     subgraph Uses ["Why This Matters"]
         U1["Cost control\nPer-session and per-student spend"]
         U2["Debugging\nTrace bad responses to their source"]
@@ -343,7 +309,6 @@ flowchart TD
         U4["Responsible AI\nGuardrail + input guardrail frequency audit trail"]
         U5["Production readiness\nLatency and failure rate tracking"]
     end
-
     CALL --> Meta --> LOG --> Uses
     Meta --> LS
     LOG --> HITL
@@ -367,9 +332,7 @@ flowchart TD
         F5["guardrail/v1.yaml"]
         F6["input_guardrail/v1.yaml"]
     end
-
     LOADER["Prompt Loader\nsrc/services/prompt_loader.py\nload_prompt() / load_ruleset()\nfunctools.lru_cache, path resolved\nfrom the loader's own file location"]
-
     subgraph Agents ["Agents"]
         A1["Discovery Agent"]
         A2["Recommendation Agent"]
@@ -378,17 +341,14 @@ flowchart TD
         A5["Guardrail Agent\n(rule-based, no LLM)"]
         A6["Input Guardrail Agent\n(rule-based, no LLM)"]
     end
-
     LLM["OpenAI LLMs\ngpt-4o-mini generation\ngpt-4o evaluation judge"]
     META["config.prompt_version_metadata()\nAttached to every orchestrator result,\nobservability log row, and LangSmith trace"]
-
     F1 --> LOADER --> A1 --> LLM
     F2 --> LOADER --> A2 --> LLM
     F3 --> LOADER --> A3 --> LLM
     F4 --> LOADER --> A4 --> LLM
     F5 --> LOADER --> A5
     F6 --> LOADER --> A6
-
     A1 & A2 & A3 & A4 & A5 & A6 --> META
 ```
 
