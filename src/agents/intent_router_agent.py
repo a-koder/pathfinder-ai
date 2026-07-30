@@ -8,6 +8,7 @@ from services.usage_tracker import UsageTracker
 
 _VALID_INTENTS = {"suggest", "explore", "roadmap", "related_topic", "general_chat"}
 _ANCHORED_INTENTS = {"roadmap", "related_topic"}
+_VALID_REQUESTED_TYPES = {"career_or_major", "college", "any"}
 _HISTORY_LIMIT = 6
 _TRAILING_TYPE_SUFFIX = re.compile(r"\s*\([a-z_]+\)\s*$", re.IGNORECASE)
 
@@ -55,7 +56,10 @@ class IntentRouterAgent:
     pipeline (decision D037 added "suggest" on top of D034's original four). Replaces the
     old literal-title-only _match_previous_choice() with something that can resolve
     implicit references ("same", "that one") using actual conversation history, which the
-    old mechanism never had access to.
+    old mechanism never had access to. Also classifies requested_type - whether the
+    student explicitly asked for colleges only, careers/majors only, or didn't specify -
+    so retrieval and recommendation generation can be biased toward the type actually
+    asked for instead of always returning a fixed blend (decision D038).
 
     Service dependencies: LLMService, TracingService (optional)
     """
@@ -78,7 +82,7 @@ class IntentRouterAgent:
         last_recommendations: list[dict],
         usage: UsageTracker | None = None,
     ) -> dict:
-        """Returns {"intent": str, "anchor_title": str | None, "reasoning": str}."""
+        """Returns {"intent": str, "anchor_title": str | None, "requested_type": str, "reasoning": str}."""
         user_prompt = (
             f"Recent conversation:\n{_format_history(recent_messages)}\n\n"
             f"Recommendations offered last turn:\n{_format_last_recommendations(last_recommendations)}\n\n"
@@ -113,7 +117,7 @@ class IntentRouterAgent:
         depends on. A real first-time visitor typically wants to see options fairly
         quickly; "suggest" is more useful once a conversation is already warming up.
         """
-        fallback = {"intent": "explore", "anchor_title": None, "reasoning": ""}
+        fallback = {"intent": "explore", "anchor_title": None, "requested_type": "any", "reasoning": ""}
         if not isinstance(raw, dict):
             return fallback
 
@@ -127,8 +131,11 @@ class IntentRouterAgent:
         reasoning = raw.get("reasoning")
         reasoning = reasoning.strip() if isinstance(reasoning, str) else ""
 
+        requested_type = raw.get("requested_type")
+        requested_type = requested_type if requested_type in _VALID_REQUESTED_TYPES else "any"
+
         if intent not in _ANCHORED_INTENTS:
-            return {"intent": intent, "anchor_title": None, "reasoning": reasoning}
+            return {"intent": intent, "anchor_title": None, "requested_type": requested_type, "reasoning": reasoning}
 
         valid_titles = {
             item.get("title", "").strip()
@@ -146,4 +153,4 @@ class IntentRouterAgent:
         if not valid_titles or anchor_title not in valid_titles:
             return fallback
 
-        return {"intent": intent, "anchor_title": anchor_title, "reasoning": reasoning}
+        return {"intent": intent, "anchor_title": anchor_title, "requested_type": requested_type, "reasoning": reasoning}

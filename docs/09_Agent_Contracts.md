@@ -27,7 +27,7 @@ Every LLM-facing prompt is externalized and versioned (decision D020) — none a
 | Component | Prompt file | Configured via | Default |
 |---|---|---|---|
 | Discovery Agent | `src/prompts/discovery/v2.md` | `DISCOVERY_PROMPT_VERSION` | `v2` |
-| Intent Router Agent | `src/prompts/intent_router/v4.md` | `INTENT_ROUTER_PROMPT_VERSION` | `v4` |
+| Intent Router Agent | `src/prompts/intent_router/v5.md` | `INTENT_ROUTER_PROMPT_VERSION` | `v5` |
 | Recommendation Agent | `src/prompts/recommendation/v1.md` | `RECOMMENDATION_PROMPT_VERSION` | `v1` |
 | Path Planning Agent | `src/prompts/path_planning/v1.md` | `PATH_PLANNING_PROMPT_VERSION` | `v1` |
 | Evaluation Service (RASCEF judge) | `src/prompts/evaluation/rascef_v1.md` | `EVALUATION_PROMPT_VERSION` | `rascef_v1` |
@@ -262,7 +262,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 4. Intent Router Agent
 
-**Responsibility:** Classifies each turn into one of five intents so the orchestrator can route to the right amount of work instead of forcing every message through the same "generate new recommendations" pipeline (decision D034, "suggest" added in D037). Replaces the old literal-title-only `_match_previous_choice()` (decision D028): that mechanism could only recognize an *exact* title mention with zero visibility into conversation history, so it had no way to resolve an implicit reference like "same" or "that one" — exactly the failure mode that motivated this agent.
+**Responsibility:** Classifies each turn into one of five intents so the orchestrator can route to the right amount of work instead of forcing every message through the same "generate new recommendations" pipeline (decision D034, "suggest" added in D037). Replaces the old literal-title-only `_match_previous_choice()` (decision D028): that mechanism could only recognize an *exact* title mention with zero visibility into conversation history, so it had no way to resolve an implicit reference like "same" or "that one" — exactly the failure mode that motivated this agent. Also classifies `requested_type` — whether the student explicitly asked for colleges only, careers/majors only, or didn't specify (decision D038) — so downstream retrieval and recommendation generation can honor an explicit "recommend some colleges" instead of always returning a fixed blend.
 
 **When called:** Concurrently with Discovery Agent, not after it — both depend only on memory load's output (the pre-turn profile's `last_recommendations` and recent conversation history), not on each other.
 
@@ -273,6 +273,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 {
   "intent": "related_topic",
   "anchor_title": "Mental Health Counselor",
+  "requested_type": "college",
   "reasoning": "The student is asking for colleges tied to the career discussed last turn."
 }
 ```
@@ -287,11 +288,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 | `related_topic` | More career/college information tied to an established anchor (e.g. "colleges for same") | Retrieval and Recommendation still run, grounded by `anchor_title`/type instead of guessing blind |
 | `general_chat` | A genuine question outside the recommendation flow (FAFSA, essay advice, term definitions) | A direct conversational answer - no Recommendation, no Path Planning call at all |
 
-**Validation rules (`_validate()`):** an unparseable response, an invalid `intent` value, or (for `roadmap`/`related_topic`) an `anchor_title` that doesn't exactly match a title actually offered last turn all fall back to `{"intent": "explore", "anchor_title": None}` - the same full-pipeline behavior the turn would have gotten without this agent, so a bad classification degrades safely rather than acting on a hallucinated anchor. If no recommendations were offered last turn, `anchor_title` is always `None` and `intent` can only resolve to `suggest`, `explore`, or `general_chat`. `suggest` is additionally forced to `explore` whenever there is no prior conversation at all (`is_first_message=True`) - a code-level rule added after the prompt's own judgment broke the capstone's own scripted live-demo line by routing a genuinely first message to a lightweight reply instead of the full pipeline that demo depends on.
+**`requested_type` (decision D038):** `"college"`, `"career_or_major"`, or `"any"` (default) — independent of intent, and meaningful mainly for `explore`/`related_topic`. `RetrievalAgent` allocates all retrieval slots to colleges (or none) when it's set, instead of the default fixed 2-of-5 blend; `RecommendationAgent` gets an explicit "every recommendation must be type X" instruction instead of guessing from a blended context. An invalid or missing value defaults to `"any"` (today's blended behavior), so a bad classification degrades to the pre-D038 behavior rather than breaking the turn.
+
+**Validation rules (`_validate()`):** an unparseable response, an invalid `intent` value, or (for `roadmap`/`related_topic`) an `anchor_title` that doesn't exactly match a title actually offered last turn all fall back to `{"intent": "explore", "anchor_title": None, "requested_type": "any"}` - the same full-pipeline behavior the turn would have gotten without this agent, so a bad classification degrades safely rather than acting on a hallucinated anchor. If no recommendations were offered last turn, `anchor_title` is always `None` and `intent` can only resolve to `suggest`, `explore`, or `general_chat`. `suggest` is additionally forced to `explore` whenever there is no prior conversation at all (`is_first_message=True`) - a code-level rule added after the prompt's own judgment broke the capstone's own scripted live-demo line by routing a genuinely first message to a lightweight reply instead of the full pipeline that demo depends on.
 
 **Failure behavior:** Same fallback as above - any exception or malformed model output resolves to `explore`, never a crash.
 
-**Prompt:** `src/prompts/intent_router/v4.md`, loaded via `PromptLoader` (see Prompt Governance above). v2 (decision D035) added an explicit worked example clarifying that `anchor_title` must never include the "(type)" annotation shown in the offered-items list - v1 let the model echo that annotation back, which a strict exact-match validation then rejected as a non-match, silently misrouting the turn to `explore`. v3 (decision D037) added the `suggest` intent. v4 (decision D037) added worked examples distinguishing pure interest-sharing from uncertainty-seeking-direction language ("I don't know what career I want"), fixing a regression where v3 misclassified the latter as `suggest` instead of `explore`.
+**Prompt:** `src/prompts/intent_router/v5.md`, loaded via `PromptLoader` (see Prompt Governance above). v2 (decision D035) added an explicit worked example clarifying that `anchor_title` must never include the "(type)" annotation shown in the offered-items list - v1 let the model echo that annotation back, which a strict exact-match validation then rejected as a non-match, silently misrouting the turn to `explore`. v3 (decision D037) added the `suggest` intent. v4 (decision D037) added worked examples distinguishing pure interest-sharing from uncertainty-seeking-direction language ("I don't know what career I want"), fixing a regression where v3 misclassified the latter as `suggest` instead of `explore`. v5 (decision D038) added the `requested_type` field so an explicit "colleges only" or "careers only" ask can bias retrieval and recommendation generation instead of always returning a fixed blend.
 
 **Optional tracing:** emits an `intent_router` trace (message, resolved intent/anchor, whether `last_recommendations` existed) via the injected `TracingService`, when configured.
 
@@ -342,7 +345,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **When called:** After the intent router's decision is resolved - skipped entirely for `roadmap` intent (nothing new needs grounding, since recommendations are reused verbatim), run for `explore`/`related_topic`/`general_chat` (decision D034). No longer concurrent with Discovery Agent as of D034 - it now depends on the resolved intent (and, for `related_topic`, the resolved anchor), so it can't start until that resolution completes.
 
-**Input:** `retrieve_relevant_context(user_message, profile, top_k=5, anchor_context="")`. `anchor_context` (e.g. `"Mental Health Counselor (career)"`) is set by the orchestrator for `related_topic` turns, folded into the embedding search text only - the `query` field in the output always reflects the literal `user_message`, never the augmented text, so the turn's record of what the student actually asked stays accurate.
+**Input:** `retrieve_relevant_context(user_message, profile, top_k=5, anchor_context="", requested_type="any")`. `anchor_context` (e.g. `"Mental Health Counselor (career)"`) is set by the orchestrator for `related_topic` turns, folded into the embedding search text only - the `query` field in the output always reflects the literal `user_message`, never the augmented text, so the turn's record of what the student actually asked stays accurate. `requested_type` (decision D038, from the intent router) overrides the default slot split below when the student explicitly asked for just colleges or just careers/majors.
 
 **Output contract:**
 ```json
@@ -372,7 +375,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 - `retrieved_documents` may be empty but is never null
 - `doc_type` is one of `career`, `major`, `college`, or `interest` (the knowledge base includes an `interests.json` dataset in addition to careers/majors/colleges)
 - `retrieval_confidence` is the average score across the returned documents
-- Of the `top_k` requested, at most 2 slots go to colleges (`_MAX_COLLEGE_SLOTS` in `retrieval_agent.py`) — the rest go to the non-college search
+- Slot allocation depends on `requested_type` (decision D038): `"any"` (default) sends at most 2 of `top_k` slots to colleges (`_MAX_COLLEGE_SLOTS` in `retrieval_agent.py`), the rest to the non-college search; `"college"` sends all slots to colleges, none to non-colleges; `"career_or_major"` sends all slots to non-colleges, none to colleges
 
 **State inference:** `_infer_state_code()` maps a free-text `location_preference` (e.g. "California", "stay in Texas") to a 2-letter state code via a name/abbreviation lookup table; anything it can't confidently resolve (e.g. "somewhere warm", "close to home") returns no filter rather than guessing. If the state-filtered college search returns fewer than the requested slots, `RetrievalService.search_colleges()` backfills with an unfiltered college search — the curated catalog is only 45 colleges, so an exact state match can reasonably come up short.
 
@@ -390,7 +393,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **When called:** After Retrieval Agent, before Path Planning Agent - skipped entirely for `roadmap` intent (last turn's items are reused verbatim instead) and `general_chat` intent (a direct conversational answer replaces it), run for `explore`/`related_topic` (decision D034).
 
-**Input:** `generate_recommendations(user_message, profile, retrieved_context, anchor_context="")`. `anchor_context` is set for `related_topic` turns, added to the prompt as an explicit instruction to keep recommendations grounded in and consistent with that topic - e.g. so "colleges for same" doesn't drift to an unrelated career.
+**Input:** `generate_recommendations(user_message, profile, retrieved_context, anchor_context="", requested_type="any")`. `anchor_context` is set for `related_topic` turns, added to the prompt as an explicit instruction to keep recommendations grounded in and consistent with that topic - e.g. so "colleges for same" doesn't drift to an unrelated career. `requested_type` (decision D038, from the intent router) adds an explicit "every recommendation must be type X" instruction when the student asked for just colleges or just careers/majors - without it, the model has no signal to prefer one type even when retrieval already skewed the context toward it.
 
 **Output contract:**
 ```json

@@ -289,6 +289,7 @@ def _generate_and_score(
     selected_override: dict | None = None,
     reused_recommendation_items: list[dict] | None = None,
     anchor_context: str = "",
+    requested_type: str = "any",
     recent_messages: list[dict] | None = None,
     usage: UsageTracker | None = None,
 ) -> tuple[dict, dict, str, dict, dict, dict]:
@@ -342,6 +343,7 @@ def _generate_and_score(
             profile=current_profile,
             retrieved_context=retrieval,
             anchor_context=anchor_context,
+            requested_type=requested_type,
             usage=usage,
         )
         path_plan = _path_planning.generate_path_plan(
@@ -445,6 +447,7 @@ def _blocked_turn_result(
         "response": response_text,
         "intent": "blocked",
         "intent_anchor_title": None,
+        "intent_requested_type": "any",
         "quality_badge": "blocked",
         "guardrail_flags": [],
         "guardrail_risk_level": "high",
@@ -586,6 +589,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
     # act on a broken anchor.
     intent = intent_result.get("intent", "explore")
     anchor_title = intent_result.get("anchor_title")
+    requested_type = intent_result.get("requested_type", "any")
     last_recommendations = current_profile.get("last_recommendations", [])
     anchor_item = next(
         (item for item in last_recommendations if isinstance(item, dict) and item.get("title") == anchor_title),
@@ -613,6 +617,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
             profile=current_profile,
             top_k=5,
             anchor_context=anchor_context,
+            requested_type=requested_type,
             usage=usage,
         )
 
@@ -623,7 +628,8 @@ def run_turn(student_name: str, user_message: str) -> dict:
         input_guardrail_flags=input_guardrail_flags, revision_attempted=False,
         mode=intent, selected_override=selected_override,
         reused_recommendation_items=last_recommendations if intent == "roadmap" else None,
-        anchor_context=anchor_context, recent_messages=memory["recent_messages"], usage=usage,
+        anchor_context=anchor_context, requested_type=requested_type,
+        recent_messages=memory["recent_messages"], usage=usage,
     )
 
     # 9b. Critic / revision loop - at most one retry, only when the RASCEF score is low
@@ -635,7 +641,8 @@ def run_turn(student_name: str, user_message: str) -> dict:
             input_guardrail_flags=input_guardrail_flags, revision_attempted=True,
             mode=intent, selected_override=selected_override,
             reused_recommendation_items=last_recommendations if intent == "roadmap" else None,
-            anchor_context=anchor_context, recent_messages=memory["recent_messages"], usage=usage,
+            anchor_context=anchor_context, requested_type=requested_type,
+            recent_messages=memory["recent_messages"], usage=usage,
         )
 
     # 9c. Append a note if the (possibly revised) response still needs more information
@@ -704,6 +711,7 @@ def run_turn(student_name: str, user_message: str) -> dict:
         "response": response_text,
         "intent": intent,
         "intent_anchor_title": anchor_title if intent in ("roadmap", "related_topic") else None,
+        "intent_requested_type": requested_type,
         "quality_badge": evaluation.get("quality_badge", "not_evaluated"),
         "guardrail_flags": guardrail.get("flags", []),
         "guardrail_risk_level": guardrail.get("risk_level", "low"),

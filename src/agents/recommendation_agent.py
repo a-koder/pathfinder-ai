@@ -57,13 +57,18 @@ class RecommendationAgent:
         profile: dict,
         retrieved_context: dict,
         anchor_context: str = "",
+        requested_type: str = "any",
         usage: UsageTracker | None = None,
     ) -> dict:
         """Runs GPT-4o-mini over the retrieved context and returns a RecommendationOutput-shaped dict.
         `anchor_context` (e.g. "Mental Health Counselor (career)") is set by the intent
         router's related_topic flow so a follow-up like "colleges for same" stays grounded
         in what was actually being discussed, instead of the model guessing from an
-        ambiguous message alone."""
+        ambiguous message alone. `requested_type` (decision D038) - "college" or
+        "career_or_major" - is the intent router's read of what the student explicitly
+        asked for; without an explicit instruction here, the model has no signal to prefer
+        one type over another and tends to default toward careers even when retrieval
+        (already biased by RetrievalAgent) surfaced mostly college context."""
         retrieved_documents = retrieved_context.get("retrieved_documents", [])
 
         # history=[] is intentional, not the same gap decision D034 fixed: conversation-level
@@ -75,10 +80,22 @@ class RecommendationAgent:
             "Keep the recommendations grounded in and consistent with this topic."
             if anchor_context else ""
         )
+        type_note = ""
+        if requested_type == "college":
+            type_note = (
+                "\n\nThe student explicitly asked for COLLEGES only. Every recommendation must "
+                "have type \"college_pathway\" - do not recommend careers or majors this turn."
+            )
+        elif requested_type == "career_or_major":
+            type_note = (
+                "\n\nThe student explicitly asked for CAREERS/MAJORS only. Every recommendation "
+                "must have type \"career\" or \"major\" - do not recommend colleges this turn."
+            )
         user_prompt = (
             f"Student message: {user_message}\n\n"
             f"{context_block}"
-            f"{anchor_note}\n\n"
+            f"{anchor_note}"
+            f"{type_note}\n\n"
             "Generate 3 to 5 grounded recommendations following the system instructions."
         )
 

@@ -51,7 +51,7 @@ sequenceDiagram
     S->>UI: Sends message
     UI->>ORC: Forwards message + session state
     ORC->>IGA: Check raw message (profanity / frustration / prompt injection)
-    IGA-->>ORC: Flags (profanity/frustration detection only; prompt_injection blocks)
+    IGA-->>ORC: Flags (profanity/frustration detection only, prompt_injection blocks)
     ORC->>MA: Load student profile and conversation summary
     MA-->>ORC: Profile JSON + last 20 messages
     opt prompt_injection_detected fired
@@ -72,7 +72,7 @@ sequenceDiagram
         Note over ORC: Skip Retrieval and Recommendation entirely -<br/>nothing new needs grounding.
         ORC->>PPA: Build roadmap around the resolved anchor item
         PPA-->>ORC: Roadmap
-        Note over ORC: Response text: "Here's your roadmap for &lt;anchor&gt;."<br/>Recommendation cards are last turn's items, unchanged.
+        Note over ORC: Response text says "Here's your roadmap for" the resolved anchor item.<br/>Recommendation cards are last turn's items, unchanged.
     else intent == general_chat
         ORC->>RETA: Retrieve context if relevant (no anchor)
         RETA-->>ORC: Retrieved documents (may be empty)
@@ -98,11 +98,11 @@ sequenceDiagram
     end
     ORC->>GA: Check response for unsafe claims
     GA-->>ORC: Guardrail flags (if any)
-    ORC->>EA: Score response quality (RASCEF; general_chat/suggest scored on<br/>answer substance, not recommendation structure)
+    ORC->>EA: Score response quality (RASCEF, general_chat/suggest scored on<br/>answer substance, not recommendation structure)
     EA-->>ORC: Dimension scores (out of 30)
     EA->>LS: Trace (prompt versions, score, badge, guardrail + input guardrail flags)
     alt total_score < 24 (critic / revision loop, max 1 retry)
-        Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning; general_chat/suggest only retry the answer)
+        Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning, general_chat/suggest only retry the answer)
         ORC->>GA: Re-check response
         GA-->>ORC: Guardrail flags (if any)
         ORC->>EA: Re-score (max one retry, accepted either way)
@@ -344,7 +344,7 @@ flowchart TD
 flowchart TD
     subgraph Files ["Prompt Files — src/prompts/<category>/<version>"]
         F1["discovery/v2.md"]
-        F2["intent_router/v4.md"]
+        F2["intent_router/v5.md"]
         F3["recommendation/v1.md"]
         F4["path_planning/v1.md"]
         F5["evaluation/rascef_v1.md"]
@@ -378,6 +378,6 @@ flowchart TD
     A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 --> META
 ```
 
-**Active versions today:** `discovery_v2`, `intent_router_v4`, `recommendation_v1`, `path_planning_v1`, `rascef_v1` (evaluation), `general_chat_v1`, `suggestions_v1`, `guardrail_v1`, `input_guardrail_v1`. Each is independently configured via `.env` (`DISCOVERY_PROMPT_VERSION`, `INTENT_ROUTER_PROMPT_VERSION`, `RECOMMENDATION_PROMPT_VERSION`, `PATH_PLANNING_PROMPT_VERSION`, `EVALUATION_PROMPT_VERSION`, `GENERAL_CHAT_PROMPT_VERSION`, `SUGGESTIONS_PROMPT_VERSION`, `GUARDRAIL_RULESET_VERSION`, `INPUT_GUARDRAIL_RULESET_VERSION`) — bumping a prompt to a new version means adding a new file and changing one env var, no code change, and the previous version stays on disk for comparison or rollback. `discovery` reached v2 when location/budget preference extraction was added (D033); `intent_router` reached v4 after two real bugs found in testing - v2 fixed an anchor-title formatting echo (D035), v3 added the `suggest` intent, v4 fixed a classification boundary that broke the acceptance suite and the capstone's own demo script (D037).
+**Active versions today:** `discovery_v2`, `intent_router_v5`, `recommendation_v1`, `path_planning_v1`, `rascef_v1` (evaluation), `general_chat_v1`, `suggestions_v1`, `guardrail_v1`, `input_guardrail_v1`. Each is independently configured via `.env` (`DISCOVERY_PROMPT_VERSION`, `INTENT_ROUTER_PROMPT_VERSION`, `RECOMMENDATION_PROMPT_VERSION`, `PATH_PLANNING_PROMPT_VERSION`, `EVALUATION_PROMPT_VERSION`, `GENERAL_CHAT_PROMPT_VERSION`, `SUGGESTIONS_PROMPT_VERSION`, `GUARDRAIL_RULESET_VERSION`, `INPUT_GUARDRAIL_RULESET_VERSION`) — bumping a prompt to a new version means adding a new file and changing one env var, no code change, and the previous version stays on disk for comparison or rollback. `discovery` reached v2 when location/budget preference extraction was added (D033); `intent_router` reached v5 after three real bugs/gaps found in testing and live usage - v2 fixed an anchor-title formatting echo (D035), v3 added the `suggest` intent, v4 fixed a classification boundary that broke the acceptance suite and the capstone's own demo script (D037), v5 added `requested_type` classification so an explicit "colleges only" or "careers only" ask can bias retrieval and recommendation generation (D038).
 
 **Why this matters for the capstone:** Prompt governance is what separates "I tuned a prompt until it worked" from "I can prove which prompt version produced which response, and roll back safely." The version tags aren't just logged — they're attached to every LangSmith trace, so a reviewer can filter by prompt version and see exactly how output quality changed between iterations.

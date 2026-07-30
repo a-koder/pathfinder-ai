@@ -143,6 +143,7 @@ class RetrievalAgent:
         profile: dict,
         top_k: int = 5,
         anchor_context: str = "",
+        requested_type: str = "any",
         usage: UsageTracker | None = None,
     ) -> dict:
         """Runs a non-college search plus a location/budget-aware college search and
@@ -152,15 +153,27 @@ class RetrievalAgent:
         Counselor (career)") when the intent router's related_topic flow needs to ground
         an ambiguous follow-up ("colleges for same") in what it actually refers to. Neither
         is folded into the displayed `query` field, so the turn's record of what the
-        student literally asked stays accurate."""
+        student literally asked stays accurate.
+
+        `requested_type` (decision D038) - "college" or "career_or_major" - comes from the
+        intent router's classification of what the student explicitly asked for; it
+        overrides the default blended split below so an explicit ask for one type isn't
+        diluted by slots spent on the other. "any" (the default) keeps today's blend."""
         profile = profile or {}
         state = _infer_state_code(profile.get("location_preference", ""))
         budget_preference = profile.get("budget_preference", "")
         profile_context = _build_profile_context(profile)
         search_text = " ".join(part for part in (user_message, profile_context, anchor_context) if part)
 
-        college_slots = min(_MAX_COLLEGE_SLOTS, top_k)
-        non_college_slots = top_k - college_slots
+        if requested_type == "college":
+            college_slots = top_k
+            non_college_slots = 0
+        elif requested_type == "career_or_major":
+            college_slots = 0
+            non_college_slots = top_k
+        else:
+            college_slots = min(_MAX_COLLEGE_SLOTS, top_k)
+            non_college_slots = top_k - college_slots
 
         non_college_docs = self._retrieval_service.search_non_colleges(
             search_text, top_k=non_college_slots, usage=usage,
@@ -194,6 +207,9 @@ class RetrievalAgent:
                 "retrieved_document_count": len(retrieved_documents),
                 "state_filter": state,
                 "budget_boost_applied": _wants_affordability(budget_preference),
+                "requested_type": requested_type,
+                "college_slots": college_slots,
+                "non_college_slots": non_college_slots,
             },
         )
         return result
