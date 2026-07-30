@@ -126,11 +126,23 @@ Two things landed together, prompted by a review question about why only the RAS
 
 Two designs were considered and rejected for the scope expansion: centralizing all trace calls inside the Orchestrator (rejected — it would mean the Orchestrator knows the internal shape of every agent's inputs/outputs just to build a trace, which is exactly the kind of coupling constructor injection is supposed to avoid), and adding tracing to Memory Agent and Observability Agent as well (rejected — those are bookkeeping steps already logged to SQLite, not AI reasoning steps LangSmith is meant to explain). Each constructor accepts `tracing_service: TracingService | None = None` and falls back to constructing its own safe, no-op-when-unconfigured instance if none is given, so no existing call site (including every test script that constructs these agents directly) needed to change. `orchestrator.py` constructs one shared `TracingService` and injects it into all seven. Verified against the live LangSmith API (direct `create_run()` calls for all six newly-traced stage names succeeded) and by re-running the full acceptance suite (7/7) plus several other test scripts that construct these agents directly.
 
+## D031: LangSmith trace calls fire on a background thread instead of blocking the turn
+
+D030 expanded tracing from one stage to seven, and a direct question followed almost immediately: is that running in parallel, since observability writes ideally should? It wasn't. A direct timing test showed `client.create_run()` takes ~80-1000ms per call — a real, blocking network round-trip — meaning seven synchronous trace calls per turn could add anywhere from several hundred milliseconds to a few seconds of pure observability overhead on top of the actual generation latency, whenever tracing was enabled.
+
+The fix: `TracingService` now builds the trace payload (metadata merge, timestamps) on the caller's thread, cheap and I/O-free, then submits the actual `create_run()` call to a small shared `ThreadPoolExecutor` (4 workers) and returns immediately. This deliberately reuses the same concurrency primitive already established for Discovery/Retrieval (D025) rather than introducing `threading.Thread` as a second pattern for the same problem.
+
+One write in the observability path was deliberately left synchronous: the SQLite `observability_logs` row written by `ObservabilityAgent.log_turn()`. Not an inconsistency — a different situation. That write is local disk, not network, so it isn't the latency source, and its return value (`log_id`) is used immediately afterward to wire the 👍/👎 feedback buttons; making it async would mean the buttons have nothing to attach to yet, solving a performance problem that write doesn't actually have. The governing principle is "network-bound and fire-and-forget goes async; fast and immediately-relied-upon stays synchronous" — not "every observability write is async by default."
+
+One tradeoff accepted, not solved: if the process exits immediately after a turn, a just-submitted trace could still be flushing. `ThreadPoolExecutor`'s default behavior blocks interpreter exit until pending work finishes, so in practice this means a short-lived script's exit is delayed by up to ~1 second rather than the trace being silently dropped — acceptable, and irrelevant for the long-running Streamlit app.
+
+Verified: a direct timing test showed `trace_event()` dropping from ~80-1000ms (blocking) to ~1-8ms (submits and returns) per call; a follow-up query against the live LangSmith API confirmed the backgrounded traces actually landed, not just returned fast while silently failing. Re-ran the full acceptance suite (7/7) plus `test_guardrail_agent.py` and `test_prompt_versioning.py` (12/12) with no change in behavior.
+
 ---
 
 ## How to Add Future Decisions
 
-New entries go at the bottom, one `##` heading per decision (`## D031: short title`), followed by a short paragraph covering what was decided, why, what else was considered, and what actually changed as a result. No fixed template beyond that; length should match how much the decision actually needed, not a fixed word count.
+New entries go at the bottom, one `##` heading per decision (`## D032: short title`), followed by a short paragraph covering what was decided, why, what else was considered, and what actually changed as a result. No fixed template beyond that; length should match how much the decision actually needed, not a fixed word count.
 
 **When to add one:** a technology or library gets locked in or swapped, a scope boundary changes, an agent's responsibility gets significantly redefined, a model or cost policy changes, or a data schema/storage strategy is updated.
 

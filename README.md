@@ -182,6 +182,8 @@ Unset, unconfigured, or unreachable — the app works identically either way. Ev
 
 **Scope:** every agent in the "one turn, in order" sequence traces itself — Input Guardrail, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation — each receiving the same shared `TracingService` instance via constructor injection, exactly like `LLMService` or `RetrievalService` are injected elsewhere. Memory Agent and Observability Agent are deliberately excluded: they're bookkeeping steps already logged to SQLite, not AI decision points LangSmith is meant to explain. Because tracing is a constructor dependency rather than a bare module import, adding it to a new stage later means passing `tracing_service=_tracing_service` at the wiring site in `orchestrator.py`, not editing `tracing_service.py` itself.
 
+**Every trace fires on a background thread, not inline.** A measured direct call to LangSmith's `create_run()` takes ~80-1000ms; blocking on that seven times per turn would add real, visible latency to every response. `TracingService.trace_event()` builds the trace payload on the caller's thread (cheap, no I/O) and submits the actual network call to a small shared `ThreadPoolExecutor`, returning immediately — measured at ~1-8ms per call after this change, versus ~80-1000ms before. Nothing in the same turn depends on a trace's return value, so there's no correctness cost to not waiting for it; a slow or unreachable LangSmith degrades to "the trace arrives late" instead of "the turn gets slower."
+
 ---
 
 ## Prompt Governance
