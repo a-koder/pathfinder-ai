@@ -313,6 +313,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 | Category | Implemented | Evidence |
 |---|---|---|
 | Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
+| Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
 | RAG | ✅ | Pinecone + OpenAI embeddings, 170 docs, metadata filtering, tested local fallback |
 | Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails detect-only by design; 2 flags not yet reachable |
 | Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
@@ -324,9 +325,12 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 <!--
 Speaker notes (50-60s):
 This is the honest version of "what does the rubric actually see," not a highlight reel.
-Five categories are fully green — multi-agent design, RAG, evaluation, structured outputs,
-and observability — each backed by real code and, for several, a live test run from earlier
-today. Three are marked partial, deliberately: guardrails, because input-side detection
+Six categories are fully green — multi-agent design, tool calling, RAG, evaluation,
+structured outputs, and observability — each backed by real code and, for several, a live
+test run from earlier today. Tool calling specifically means agents never call Pinecone,
+OpenAI, or SQLite directly — every call goes through an injected service, which is what
+makes swapping a provider or mocking a test possible without touching agent code. Three are
+marked partial, deliberately: guardrails, because input-side detection
 doesn't block anything and two output flags can't fire yet since the profile fields they
 depend on aren't populated; operationalization, because there's no CI or automated test
 gate; and the improvement loop, because the automatic per-turn retry is implemented and
@@ -454,7 +458,7 @@ Thank you — happy to take questions.
 # Appendix
 ### (reference material — not part of the 10-minute talk)
 
-Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation
+Storyboard · Visual Asset Map · Demo Script · Slide-Cut Recommendation · Agent Roster
 
 ---
 
@@ -545,3 +549,32 @@ Rough timing at the pacing implied by the speaker notes above: ~9 minutes for sl
 5. **Cut Slide 10 (AI Concepts, Named) entirely if still over time.** Its content is already implied across slides 4–9; it's a reinforcement aid for evaluators skimming a recording, not new information the live talk depends on.
 
 Applying just #1 (skip 13–16) comfortably brings a timed talk to ~11.5–13 minutes with the demo; adding #2 and #3 brings it to ~10–11.5 minutes — recommended as the default plan for any time-boxed presentation. Keep slides 13–16 in the file for anyone reading the deck directly rather than watching it presented.
+
+---
+
+## Appendix E — Agent Roster (Backup Slide)
+
+*Not part of the main flow — pull this up only if asked "what are the 10 agents, exactly?"*
+
+| Agent | Purpose |
+|---|---|
+| Orchestrator | Coordinates the full turn; applies the one-retry critic/revision loop |
+| Input Guardrail | Flags profanity, frustration, prompt-injection — detection only |
+| Memory | Loads, merges, and persists student profile + conversation history |
+| Discovery | Extracts profile fields from the student's latest message |
+| Retrieval | Semantic search over the knowledge base via Pinecone |
+| Recommendation | Generates 3–5 grounded career/major/college options |
+| Path Planning (Roadmap) | Turns one recommendation into a phased next-step plan |
+| Guardrail (Output) | Post-generation safety check — 10 rule-based flags |
+| Evaluation | RASCEF quality scoring — LLM-as-judge with a rule-based fallback |
+| Observability | Logs every turn — cost, latency, guardrail flags, quality score |
+
+Full contracts, inputs/outputs, and failure behavior for each: `docs/09_Agent_Contracts.md`.
+
+<!--
+Not a live-talk slide — no speaker notes needed. Use it verbatim if a reviewer asks to see
+the agent list; every row here matches the Agent Inventory table in
+docs/04_Architecture.md and the roster in docs/09_Agent_Contracts.md exactly, so there's
+nothing to reconcile on the fly.
+-->
+
