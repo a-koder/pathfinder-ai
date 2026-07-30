@@ -320,7 +320,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 | Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
 | Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
 | RAG | ✅ | Pinecone + OpenAI embeddings, 223 docs, metadata filtering (incl. state/budget-aware college search, D033), tested local fallback |
-| Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails block on prompt-injection, detect-only on profanity/frustration by design; 2 output flags not yet reachable |
+| Guardrails | ✅ | Output guardrails enforce (all 10 flags reachable as of D033 - the budget/location flags can now both fire and clear on real profile data); input guardrails block on prompt-injection, detect-only on profanity/frustration by design |
 | Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
 | Structured Outputs | ✅ | JSON contracts everywhere; reference Pydantic models exist, not yet runtime-enforced |
 | Observability | ✅ | Real per-model cost, full per-turn logging, optional LangSmith |
