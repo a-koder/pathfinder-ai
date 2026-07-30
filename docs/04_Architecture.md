@@ -108,7 +108,7 @@ At-a-glance version of what's fully detailed in `docs/09_Agent_Contracts.md`. "E
 | Agent | Purpose | Key Inputs | Key Outputs | Failure Handling | External Services |
 |---|---|---|---|---|---|
 | Orchestrator | Runs the fixed per-turn pipeline; applies the one-retry critic/revision loop | `student_name`, `user_message` | Full turn result (response, recommendations, path plan, scores, trace) | Each stage degrades independently (no single global try/except); guardrail/evaluation notes appended rather than blocking; logging failures swallowed | None directly — delegates to every agent below |
-| Input Guardrail Agent | Pre-generation rule-based check (profanity / frustration / prompt-injection); detection only | `user_message` | `{flags, passed}` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
+| Input Guardrail Agent | Pre-generation rule-based check (profanity / frustration / prompt-injection); blocks the turn on `prompt_injection_detected` only, profanity/frustration stay detection-only | `user_message` | `{flags, passed}` | Pure string/dict logic, no I/O — nothing to fail | Optional LangSmith trace |
 | Memory Agent | Load, merge, and persist student profile + conversation history | `student_name`, profile updates, message content | Profile dict, `recent_messages`, `session_number` | SQLite unavailable → empty in-memory profile for that turn; saves become no-ops rather than raising | SQLite (via repositories) |
 | Discovery Agent | Extract profile fields from the latest message only; never invents GPA/grade | `student_name`, `user_message`, `existing_profile` | `student_profile_updates`, `confidence`, `missing_information`, `next_question` | Low-confidence/failed extraction → returns the existing profile unchanged plus a safe open-ended fallback question | OpenAI (`gpt-4o-mini` via `LLMService`); optional LangSmith trace |
 | Retrieval Agent | Semantic search over the knowledge base | `user_message`, `profile`, `top_k` | `query`, `retrieved_documents`, `retrieval_confidence` | Pinecone unreachable → transparent fallback to local tag-match search over the same JSON files | OpenAI (embeddings), Pinecone; optional LangSmith trace |
@@ -262,13 +262,19 @@ app.py calls orchestrator.run_turn(student_name, user_message)
         │
         ▼
 InputGuardrailAgent.check_input(user_message)
-  └── Rule-based checks — no LLM call — flags recorded on the turn, never blocks the conversation
+  └── Rule-based checks — no LLM call — profanity/frustration flags recorded, never block
+  └── prompt_injection_detected is the exception: blocks the turn (decision D032, see below)
   └── Runs first: a pure function of user_message, no dependency on memory (decision D025)
         │
         ▼
 MemoryAgent.load_memory(student_name)
   └── ProfileRepository.get_profile() + MessageRepository.get_recent_messages()
         │  (via SQLiteClient)
+        ▼
+[if prompt_injection_detected] → return blocked-turn result immediately (decision D032)
+  └── Fixed safe response, no LLM call made, $0.00 cost, still logged + saved to memory
+  └── Discovery / Retrieval / Recommendation / Path Planning / Guardrail / Evaluation all skipped
+        │  (assume not blocked below)
         ▼
 ┌─────────────────────────── concurrent.futures.ThreadPoolExecutor(max_workers=2) ───────────────────────────┐
 │ DiscoveryAgent.extract_profile_updates(student_name, user_message, existing_profile)                        │

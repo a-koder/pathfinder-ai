@@ -166,7 +166,7 @@ Transition: "Grounding handles accuracy — now let's talk about safety."
 
 ## Responsible AI, By Design
 
-- **Input guardrails**: profanity, frustration, prompt-injection — detect only
+- **Input guardrails**: profanity, frustration detect only — prompt-injection actually blocks
 - **Output guardrails**: 10 rules — no admission/salary guarantees, no bias
 - **RASCEF**: 6-dimension LLM-as-judge score, every turn
 - **Revision loop**: auto-regenerates once if quality falls short
@@ -174,8 +174,10 @@ Transition: "Grounding handles accuracy — now let's talk about safety."
 <!--
 Speaker notes (45-55s):
 Safety runs twice — before generation and after. Before: a rule-based check flags
-profanity, frustration, or prompt-injection attempts, purely for visibility, it never
-blocks the student. After: 10 rule-based flags catch things like admission guarantees,
+profanity, frustration, or prompt-injection attempts. Profanity and frustration are
+detection-only, purely for visibility. Prompt-injection is the exception — it actually
+blocks the turn, returning a fixed safe response with no LLM call made at all, so it costs
+nothing. After generation: 10 rule-based flags catch things like admission guarantees,
 salary promises, or missing GPA context before college advice — you can see that exact
 note live on the right, flagged in amber. Then RASCEF — Relevance, Accuracy, Safety,
 Completeness, Explainability, Fairness — scores the response out of 30 using GPT-4o as a
@@ -316,7 +318,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 | Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
 | Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
 | RAG | ✅ | Pinecone + OpenAI embeddings, 170 docs, metadata filtering, tested local fallback |
-| Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails detect-only by design; 2 flags not yet reachable |
+| Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails block on prompt-injection, detect-only on profanity/frustration by design; 2 output flags not yet reachable |
 | Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
 | Structured Outputs | ✅ | JSON contracts everywhere; reference Pydantic models exist, not yet runtime-enforced |
 | Observability | ✅ | Real per-model cost, full per-turn logging, optional LangSmith |
@@ -331,9 +333,10 @@ structured outputs, and observability — each backed by real code and, for seve
 test run from earlier today. Tool calling specifically means agents never call Pinecone,
 OpenAI, or SQLite directly — every call goes through an injected service, which is what
 makes swapping a provider or mocking a test possible without touching agent code. Three are
-marked partial, deliberately: guardrails, because input-side detection
-doesn't block anything and two output flags can't fire yet since the profile fields they
-depend on aren't populated; operationalization, because there's no CI or automated test
+marked partial, deliberately: guardrails, because profanity and frustration on the input
+side remain detection-only by design and two output flags can't fire yet since the profile
+fields they depend on aren't populated — prompt-injection is the one input flag that
+actually blocks, added after a review question about exactly this; operationalization, because there's no CI or automated test
 gate; and the improvement loop, because the automatic per-turn retry is implemented and
 tested, but the cross-session prompt-versioning story hasn't been exercised with an actual
 second prompt version yet. Marking these partial instead of green is the point — it's more
@@ -560,7 +563,7 @@ Applying just #1 (skip 13–16) comfortably brings a timed talk to ~11.5–13 mi
 | Agent | Purpose |
 |---|---|
 | Orchestrator | Coordinates the full turn; applies the one-retry critic/revision loop |
-| Input Guardrail | Flags profanity, frustration, prompt-injection — detection only |
+| Input Guardrail | Flags profanity, frustration (detection only) — blocks the turn on prompt-injection |
 | Memory | Loads, merges, and persists student profile + conversation history |
 | Discovery | Extracts profile fields from the student's latest message |
 | Retrieval | Semantic search over the knowledge base via Pinecone |

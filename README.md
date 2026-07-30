@@ -73,7 +73,7 @@ Full contracts for every agent: `docs/09_Agent_Contracts.md`. Full architecture 
 | Agent | Responsibility |
 |---|---|
 | Orchestrator | Runs the fixed pipeline above; assembles the final response and trace; runs the critic/revision retry |
-| Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags; detection only); runs first, before memory load |
+| Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags); runs first, before memory load; blocks the turn only on `prompt_injection_detected`, profanity/frustration remain detection-only |
 | Memory Agent | Loads/merges/persists the student profile and message history |
 | Discovery Agent | Extracts profile fields from the latest message only; never invents GPA or grade level; runs concurrently with Retrieval |
 | Retrieval Agent | Semantic search over the knowledge base via Pinecone; runs concurrently with Discovery |
@@ -119,7 +119,7 @@ Full design rationale (why one namespace, why metadata filtering over multiple i
 
 ## Input + Output Guardrails
 
-**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). It's detection-only — flags are recorded on the turn and shown in the trace, but the conversation is never blocked or altered based on them. It runs before memory load, since it's a pure function of the raw message with no dependency on stored state.
+**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). `profanity_detected` and `frustration_detected` remain detection-only — flags are recorded on the turn and shown in the trace, but the conversation proceeds unchanged. `prompt_injection_detected` is the exception: the turn short-circuits immediately after memory load, before Discovery/Retrieval/Recommendation ever run, and returns a fixed safe response instead — no LLM call is made, so a blocked turn costs $0.00. The check itself still runs before memory load, since it's a pure function of the raw message with no dependency on stored state; the block is applied right after memory load (see `docs/09_Agent_Contracts.md` for the exact sequencing).
 
 **Output Guardrails:** rule-based, no LLM call. Scans the full turn's text for unsafe language and checks the profile for context the response implicitly depends on:
 

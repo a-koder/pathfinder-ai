@@ -53,10 +53,15 @@ sequenceDiagram
     UI->>ORC: Forwards message + session state
 
     ORC->>IGA: Check raw message (profanity / frustration / prompt injection)
-    IGA-->>ORC: Flags (detection only, never blocks)
+    IGA-->>ORC: Flags (profanity/frustration detection only; prompt_injection blocks)
 
     ORC->>MA: Load student profile and conversation summary
     MA-->>ORC: Profile JSON + last 10 messages
+
+    opt prompt_injection_detected fired
+        ORC-->>UI: Return fixed safe response immediately - no LLM call, $0.00
+        Note over ORC: Discovery/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation all skipped
+    end
 
     par Discovery and Retrieval run concurrently
         ORC->>DA: Update student understanding
@@ -242,6 +247,7 @@ erDiagram
 flowchart TD
     MSG["Raw Student Message"]
     IG{"Input Guardrail\nprofanity / frustration /\nprompt-injection?"}
+    BLOCKED["Fixed safe response returned\nNo LLM call - $0.00 cost\nDiscovery/Retrieval/Recommendation/\nPath Planning/Guardrail/Evaluation all skipped"]
     GEN["Recommendation + Path Planning\nfrom GPT-4o-mini"]
 
     subgraph Guardrails ["Output Guardrail — 10 Rule-Based Flags"]
@@ -265,7 +271,8 @@ flowchart TD
     STILLLOW["Still < 24 after retry\nReturn anyway, with a\n'needs more info' note"]
 
     MSG --> IG
-    IG -- "flags recorded, never blocks" --> GEN
+    IG -- "prompt_injection_detected" --> BLOCKED
+    IG -- "profanity/frustration flags recorded, never blocks" --> GEN
     GEN --> Guardrails
     G1 -- "high risk" --> SAFENOTE["Safe note appended\n(never withheld)"]
     G2 -- "medium risk" --> LIMNOTE["'Keep in mind' note appended"]
@@ -279,6 +286,8 @@ flowchart TD
     RETRY -- "Yes, first attempt" --> GEN
     RETRY -- "Yes, already retried once" --> STILLLOW
 ```
+
+**Input guardrail blocking (decision D032):** `prompt_injection_detected` is the one input flag that actually stops the turn — the response never reaches Recommendation/Path Planning/output Guardrail/Evaluation at all, a fixed safe message is returned instead, and no LLM call is made (so a blocked turn costs $0.00). `profanity_detected`/`frustration_detected` remain detection-only, per D023's original scope.
 
 **Scoring threshold:** 24 out of 30, computed deterministically from `total_score` (never trusted from the model). A response below threshold triggers exactly one regenerate-and-recheck retry (the critic/revision loop); if it is still below threshold after that retry, it is returned anyway with a "needs more information" note rather than withheld or retried further. Every attempt — including the retry — is logged to `observability_logs` and, if configured, traced to LangSmith.
 
