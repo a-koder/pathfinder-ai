@@ -48,15 +48,16 @@ Every agent constructor accepts an optional `prompt_version` (or `ruleset_versio
 | Orchestrator | `src/agents/orchestrator.py` | `run_turn(student_name, user_message)` | Every conversation turn | All agents + services (injected) |
 | Input Guardrail Agent | `src/agents/input_guardrail_agent.py` | `check_input(user_message)` | First step in the turn, before memory load | `TracingService` (optional) |
 | Memory Agent | `src/agents/memory_agent.py` | `load_memory()`, `update_profile()`, `save_turn()` | Load right after the input guardrail; merge after Discovery; save at turn end | `StudentRepository`, `ProfileRepository`, `MessageRepository`, `ConversationSummaryRepository` |
-| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Retrieval, after memory load | `LLMService`, `TracingService` (optional) |
-| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | Concurrently with Discovery, after memory load | `RetrievalService`, `TracingService` (optional) |
-| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Discovery and Retrieval both complete and the profile is merged | `LLMService`, `PromptService`, `TracingService` (optional) |
-| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation | `LLMService`, `TracingService` (optional) |
-| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning, before Evaluation | `TracingService` (optional) |
+| Intent Router Agent | `src/agents/intent_router_agent.py` | `classify_intent()` | Concurrently with Discovery, after memory load | `LLMService`, `TracingService` (optional) |
+| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Intent Router, after memory load | `LLMService`, `TracingService` (optional) |
+| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | After intent resolution; skipped for "roadmap" intent | `RetrievalService`, `TracingService` (optional) |
+| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Retrieval, for "explore"/"related_topic" intents only | `LLMService`, `PromptService`, `TracingService` (optional) |
+| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation ("explore"/"related_topic") or directly after intent resolution ("roadmap"); skipped for "general_chat" | `LLMService`, `TracingService` (optional) |
+| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning (or the general-chat answer), before Evaluation | `TracingService` (optional) |
 | Evaluation Agent | `src/agents/evaluation_agent.py` | `evaluate()` | After Guardrail | `EvaluationService`, `TracingService` (optional) |
 | Observability Agent | `src/agents/observability_agent.py` | `log_turn()` | End of every turn | `ObservabilityRepository` |
 
-**"Optional" above means the constructor accepts `tracing_service: TracingService | None = None` and falls back to constructing its own (safe, no-op-when-unconfigured) instance if none is given — so every existing call site that constructs an agent directly, including the test scripts, keeps working unchanged. In the running app, `orchestrator.py` injects one shared `TracingService` instance into all seven, so a single client connection (when tracing is actually enabled) serves the whole turn.**
+**"Optional" above means the constructor accepts `tracing_service: TracingService | None = None` and falls back to constructing its own (safe, no-op-when-unconfigured) instance if none is given — so every existing call site that constructs an agent directly, including the test scripts, keeps working unchanged. In the running app, `orchestrator.py` injects one shared `TracingService` instance into all eight traced agents, so a single client connection (when tracing is actually enabled) serves the whole turn.**
 
 ## Dependency Injection Pattern
 
@@ -113,11 +114,11 @@ The same `tracing_service` instance is passed to all seven — one shared client
 
 **When called:** On every student message, via `run_turn(student_name, user_message)`.
 
-**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → (if `prompt_injection_detected` fired, short-circuit here and return a blocked-turn result — see decision D032 and the Input Guardrail Agent section below; everything past this point assumes it did not) → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `_match_previous_choice()` (checks whether this message names one of last turn's offered recommendations, decision D028) → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` (using the matched item as `selected_override` if one was found) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results and the same `selected_override`) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (persists this turn's offered items for the next turn's choice matching) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
+**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → (if `prompt_injection_detected` fired, short-circuit here and return a blocked-turn result — see decision D032 and the Input Guardrail Agent section below; everything past this point assumes it did not) → **`discovery.extract_profile_updates()` ‖ `intent_router.classify_intent()` (concurrent)** → `memory.update_profile()` → resolve `anchor_title` against the merged profile's `last_recommendations` (falls back to `explore` if it doesn't resolve, decision D034) → **branch on intent:** `roadmap` skips Retrieval + Recommendation and reuses last turn's items verbatim; `general_chat` runs Retrieval only (no anchor) and skips Recommendation/Path Planning entirely in favor of a direct conversational answer; `explore`/`related_topic` run `retrieval.retrieve_relevant_context()` → `recommendation.generate_recommendations()` (with `anchor_context` for `related_topic`) → `path_planning.generate_path_plan()` (using the resolved anchor as `selected_override` for `roadmap`, or the top-ranked item otherwise) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` (with `is_general_chat` set appropriately) → **critic/revision loop** (if `evaluation.requires_revision` is true: re-run exactly the same branch that ran above, then guardrail → evaluation, exactly once more) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (skipped for `general_chat` - see decision D034) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
 
-**Parallelization (decision D025):** Discovery and Retrieval both depend only on memory load's output — Discovery needs the pre-turn profile to extract updates, Retrieval needs the pre-turn profile's `location_preference`/`budget_preference` to filter colleges (decision D033; see Retrieval Agent below) — and neither depends on the other's output (Retrieval uses the profile as it existed *before* this turn's Discovery updates, not after), so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI / Pinecone through a shared, thread-safe SDK client), so this overlaps wait time rather than parallelizing CPU work — no change in output for any given input, only latency. The Input Guardrail check was also moved to run before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
+**Parallelization (decision D025, intent router added in D034):** Discovery and Intent Router both depend only on memory load's output — Discovery needs the pre-turn profile to extract updates, Intent Router needs that same pre-turn profile's `last_recommendations` plus recent conversation history to classify the turn — and neither depends on the other's output, so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI), so this overlaps wait time rather than parallelizing CPU work. Retrieval is *not* in this concurrent pair (a change from D025's original scope) - it now runs after intent resolution, since whether it runs at all, and what grounding it gets, depends on the resolved intent. The Input Guardrail check runs before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
 
-**Critic / revision loop (decision D023):** `input_guardrail`, `discovery`, and `retrieval` run once per turn regardless of evaluation outcome — only `recommendation.generate_recommendations()`, `path_planning.generate_path_plan()`, `guardrail.check_guardrails()`, and `evaluation.evaluate()` are re-run on a retry, via the shared `_generate_and_score()` helper in `orchestrator.py`. At most one retry ever happens: the loop is a single `if`, not a `while`, so a still-low score after the retry is accepted and surfaced (with the "needs more info" note) rather than retried again. `revision_attempted` is `true` whenever a retry happened, `false` otherwise — set once and never re-evaluated after the retry decision.
+**Critic / revision loop (decision D023, mode-aware since D034):** `input_guardrail`, `discovery`, and `intent_router` run once per turn regardless of evaluation outcome — only the branch that actually ran (Recommendation + Path Planning for `explore`/`related_topic`; Path Planning alone for `roadmap`; the general-chat answer call alone for `general_chat`), plus `guardrail.check_guardrails()` and `evaluation.evaluate()`, are re-run on a retry, via the shared `_generate_and_score()` helper in `orchestrator.py`. At most one retry ever happens: the loop is a single `if`, not a `while`, so a still-low score after the retry is accepted and surfaced (with the "needs more info" note) rather than retried again. `revision_attempted` is `true` whenever a retry happened, `false` otherwise — set once and never re-evaluated after the retry decision.
 
 **Enrichment (decision D026):** After the revision loop settles on a final response, `orchestrator._enrich_recommendations()` makes one additional LLM call (not through `PromptLoader` — an inline, unversioned system prompt, since this is display-only polish, not a governed generation step) to add `fun_facts` (list of 2-3 strings) and `future_outlook` (one positively-framed sentence) to each recommendation item. This runs strictly after guardrails and evaluation have already scored the response, so it never affects RASCEF scoring or guardrail checks, and its output is never persisted — it is regenerated fresh on every turn and only appears in the `recommendations` list returned to the UI. See the Recommendation Agent section below for how this relates to that agent's own contract.
 
@@ -126,6 +127,8 @@ The same `tracing_service` instance is passed to all seven — one shared client
 {
   "student_name": "Jordan",
   "response": "Thanks, Jordan! ...(full counselor-style reply, with any guardrail/evaluation notes appended)...",
+  "intent": "explore",
+  "intent_anchor_title": null,
   "quality_badge": "green",
   "guardrail_flags": ["missing_gpa_for_college_guidance"],
   "guardrail_risk_level": "medium",
@@ -146,19 +149,24 @@ The same `tracing_service` instance is passed to all seven — one shared client
   "observability_log_id": 27,
   "token_usage_by_model": {"gpt-4o-mini": {"prompt_tokens": 1957, "completion_tokens": 1618}, "...": "..."},
   "estimated_cost_usd": 0.0090,
-  "discovery_prompt_version": "discovery_v1",
+  "discovery_prompt_version": "discovery_v2",
+  "intent_router_prompt_version": "intent_router_v2",
   "recommendation_prompt_version": "recommendation_v1",
   "path_planning_prompt_version": "path_planning_v1",
   "evaluation_prompt_version": "rascef_v1",
+  "general_chat_prompt_version": "general_chat_v1",
   "guardrail_ruleset_version": "guardrail_v1",
   "input_guardrail_ruleset_version": "input_guardrail_v1"
 }
 ```
 
+`intent` reflects the resolved routing decision for this turn (`"explore"`, `"roadmap"`, `"related_topic"`, `"general_chat"`, or `"blocked"` on the prompt-injection short-circuit path); `intent_anchor_title` is the resolved anchor for `roadmap`/`related_topic` turns, `null` otherwise.
+
 The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Governance above) — static per process, not computed per turn, but included on every result for traceability. `observability_log_id` is the `observability_logs.log_id` row written by this turn (or `None` if logging failed) — the UI uses it to wire the 👍/👎 feedback buttons to `ObservabilityRepository.save_feedback()`, via a thin `submit_feedback(log_id, helpful, feedback_text=None)` wrapper in `orchestrator.py` (so `app.py` never imports repositories directly).
 
 **Failure behavior:**
-- A detected `prompt_injection_detected` input flag blocks the turn entirely (decision D032) — a fixed safe response is returned and Discovery/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation are all skipped; see the Input Guardrail Agent section below.
+- A detected `prompt_injection_detected` input flag blocks the turn entirely (decision D032) — a fixed safe response is returned and Intent Router/Discovery/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation are all skipped; see the Input Guardrail Agent section below.
+- An unresolvable intent classification (unparseable output, invalid intent, or an anchor that doesn't match anything actually offered last turn) falls back to `explore` — the same full-pipeline behavior the turn would have gotten without Intent Router (decision D034); see the Intent Router Agent section below.
 - A guardrail `risk_level: high` gets a fixed safe note appended to the response (never returned unmodified); `medium` gets a "keep in mind" limitations note built from `required_revisions`.
 - If `evaluation.requires_revision` is still true after the critic/revision retry (see above), a short note is appended asking the student to share more profile detail.
 - Logging failures (`observability.log_turn()`) are swallowed at both the agent and orchestrator call site — a broken log write never breaks the response; `observability_log_id` is simply `None` in that case, and the feedback buttons don't render.
@@ -201,7 +209,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **`update_profile(student_name, profile_updates)` output:** the merged profile dict (same shape as `profile` above). List fields (`interests`, `strengths`, `career_preferences`, `college_preferences`, `favorite_careers`) are merged case-insensitively without duplicates; scalar fields (`grade_level`, `gpa`, the four preference fields) are only overwritten when the new value is non-empty/non-null.
 
-**`remember_last_recommendations(student_id, recommendations)`:** overwrites (does not merge) a `last_recommendations` key on the profile with this turn's offered recommendation items verbatim. Unlike the list fields above, this is not an accumulating trait — it's replaced every turn so it always reflects only what was *just* offered, letting the next turn's `_match_previous_choice()` (in `orchestrator.py`) check whether the student's reply names one of them. Returns nothing; failures are swallowed.
+**`remember_last_recommendations(student_id, recommendations)`:** overwrites (does not merge) a `last_recommendations` key on the profile with this turn's offered recommendation items verbatim. Unlike the list fields above, this is not an accumulating trait — it's replaced every turn so it always reflects only what was *just* offered, letting the next turn's `IntentRouterAgent` (section 4 below) resolve whether the student's reply refers to one of them — including implicit references ("same", "that one"), not just an exact title match. Skipped entirely for `general_chat` turns (decision D034), so a side question doesn't erase a still-relevant earlier anchor. Returns nothing; failures are swallowed.
 
 **`save_turn(student_name, user_message, assistant_response, metadata)`:** persists the user and assistant messages. Returns nothing; failures are swallowed.
 
@@ -239,7 +247,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Matching:** `\b`-anchored regex word-boundary matching against phrase lists — chosen specifically to avoid single-word terms false-triggering inside legitimate words.
 
-**Orchestrator behavior on the result:** Flags are always recorded on the turn (`input_guardrail_flags` in the result dict and the `observability_logs` row) and shown in the UI's collapsed "Technical details" section. For `profanity_detected`/`frustration_detected`, that's the entire effect — the turn proceeds unchanged. For `prompt_injection_detected`, the orchestrator short-circuits: Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation are all skipped entirely, and a fixed safe response (`_PROMPT_INJECTION_SAFE_RESPONSE`) is returned instead. No LLM call is made on the blocked path, so it costs $0.00 and the response is essentially instant (~0.1s, measured).
+**Orchestrator behavior on the result:** Flags are always recorded on the turn (`input_guardrail_flags` in the result dict and the `observability_logs` row) and shown in the UI's collapsed "Technical details" section. For `profanity_detected`/`frustration_detected`, that's the entire effect — the turn proceeds unchanged. For `prompt_injection_detected`, the orchestrator short-circuits: Intent Router, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation are all skipped entirely, and a fixed safe response (`_PROMPT_INJECTION_SAFE_RESPONSE`) is returned instead. No LLM call is made on the blocked path, so it costs $0.00 and the response is essentially instant (~0.1s, measured).
 
 **Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail.
 
@@ -249,7 +257,43 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 4. Discovery Agent
+## 4. Intent Router Agent
+
+**Responsibility:** Classifies each turn into one of four intents so the orchestrator can route to the right amount of work instead of forcing every message through the same "generate new recommendations" pipeline (decision D034). Replaces the old literal-title-only `_match_previous_choice()` (decision D028): that mechanism could only recognize an *exact* title mention with zero visibility into conversation history, so it had no way to resolve an implicit reference like "same" or "that one" — exactly the failure mode that motivated this agent.
+
+**When called:** Concurrently with Discovery Agent, not after it — both depend only on memory load's output (the pre-turn profile's `last_recommendations` and recent conversation history), not on each other.
+
+**Input:** `classify_intent(user_message, recent_messages, last_recommendations)`.
+
+**Output contract:**
+```json
+{
+  "intent": "related_topic",
+  "anchor_title": "Mental Health Counselor",
+  "reasoning": "The student is asking for colleges tied to the career discussed last turn."
+}
+```
+
+**Intent taxonomy:**
+
+| Intent | Meaning | Downstream effect |
+|---|---|---|
+| `explore` | New recommendations, or no prior context to anchor to | Today's full pipeline: Retrieval → Recommendation → Path Planning |
+| `roadmap` | A plan for something already offered, named exactly or implicitly ("that one", "the same one") | Recommendation is skipped - last turn's items are reused verbatim; Path Planning anchors to the resolved item |
+| `related_topic` | More career/college information tied to an established anchor (e.g. "colleges for same") | Retrieval and Recommendation still run, grounded by `anchor_title`/type instead of guessing blind |
+| `general_chat` | A genuine question outside the recommendation flow (FAFSA, essay advice, term definitions) | A direct conversational answer - no Recommendation, no Path Planning call at all |
+
+**Validation rules (`_validate()`):** an unparseable response, an invalid `intent` value, or (for `roadmap`/`related_topic`) an `anchor_title` that doesn't exactly match a title actually offered last turn all fall back to `{"intent": "explore", "anchor_title": None}` - the same full-pipeline behavior the turn would have gotten without this agent, so a bad classification degrades safely rather than acting on a hallucinated anchor. If no recommendations were offered last turn, `anchor_title` is always `None` and `intent` can only resolve to `explore` or `general_chat`.
+
+**Failure behavior:** Same fallback as above - any exception or malformed model output resolves to `explore`, never a crash.
+
+**Prompt:** `src/prompts/intent_router/v2.md`, loaded via `PromptLoader` (see Prompt Governance above). v2 (decision D035) added an explicit worked example clarifying that `anchor_title` must never include the "(type)" annotation shown in the offered-items list - v1 let the model echo that annotation back, which a strict exact-match validation then rejected as a non-match, silently misrouting the turn to `explore`.
+
+**Optional tracing:** emits an `intent_router` trace (message, resolved intent/anchor, whether `last_recommendations` existed) via the injected `TracingService`, when configured.
+
+---
+
+## 5. Discovery Agent
 
 **Responsibility:** Extracts structured profile fields from the student's latest message only (not the full history). Never invents a grade level or GPA the student didn't state. Identifies what's still missing and proposes one clarifying question.
 
@@ -282,19 +326,19 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** If extraction fails or `confidence < 0.5`, `student_profile_updates` is the *existing* profile unchanged (not emptied), and `next_question` falls back to a safe open-ended prompt.
 
-**Prompt:** `src/prompts/discovery/v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
+**Prompt:** `src/prompts/discovery/v2.md`, loaded via `PromptLoader` (see Prompt Governance above).
 
 **Optional tracing:** emits a `discovery` trace (student name, message, confidence) via the injected `TracingService`, when configured.
 
 ---
 
-## 5. Retrieval Agent
+## 6. Retrieval Agent
 
 **Responsibility:** Runs two semantic searches against Pinecone and normalizes the merged results — `RetrievalService.search_non_colleges()` for careers/majors/interests (unfiltered blend, as `search_all()` used to do for everything), and `search_colleges()` for colleges specifically, narrowed by the profile's `location_preference` (as a `state` metadata filter, decision D033) and `budget_preference` (as a soft public/private re-rank, not a hard filter — there's no real per-college cost data to justify excluding a school outright).
 
-**When called:** Concurrently with Discovery Agent, not after it (see decision D025 in the Orchestrator section above) — both depend only on memory load's output, not on each other.
+**When called:** After the intent router's decision is resolved - skipped entirely for `roadmap` intent (nothing new needs grounding, since recommendations are reused verbatim), run for `explore`/`related_topic`/`general_chat` (decision D034). No longer concurrent with Discovery Agent as of D034 - it now depends on the resolved intent (and, for `related_topic`, the resolved anchor), so it can't start until that resolution completes.
 
-**Input:** `retrieve_relevant_context(user_message, profile, top_k=5)`.
+**Input:** `retrieve_relevant_context(user_message, profile, top_k=5, anchor_context="")`. `anchor_context` (e.g. `"Mental Health Counselor (career)"`) is set by the orchestrator for `related_topic` turns, folded into the embedding search text only - the `query` field in the output always reflects the literal `user_message`, never the augmented text, so the turn's record of what the student actually asked stays accurate.
 
 **Output contract:**
 ```json
@@ -336,13 +380,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 6. Recommendation Agent
+## 7. Recommendation Agent
 
 **Responsibility:** Generates 3–5 grounded recommendations (career, major, or college pathway) using GPT-4o-mini, given the student's message, profile, and retrieved documents. Every career recommendation must explain why it's exciting and what opportunities it opens — the goal is to expand a student's sense of possibility, not just list a feature match.
 
-**When called:** After Retrieval Agent, before Path Planning Agent.
+**When called:** After Retrieval Agent, before Path Planning Agent - skipped entirely for `roadmap` intent (last turn's items are reused verbatim instead) and `general_chat` intent (a direct conversational answer replaces it), run for `explore`/`related_topic` (decision D034).
 
-**Input:** `generate_recommendations(user_message, profile, retrieved_context)`.
+**Input:** `generate_recommendations(user_message, profile, retrieved_context, anchor_context="")`. `anchor_context` is set for `related_topic` turns, added to the prompt as an explicit instruction to keep recommendations grounded in and consistent with that topic - e.g. so "colleges for same" doesn't drift to an unrelated career.
 
 **Output contract:**
 ```json
@@ -385,16 +429,16 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 7. Path Planning Agent
+## 8. Path Planning Agent
 
 **Responsibility:** Turns one selected recommendation into a concrete, phased roadmap: short-term (3–6 months), medium-term (1–3 years), long-term, skills to build, project ideas, and college-preparation steps. A recommendation answers "what might fit me?" — a path plan answers "what should I do next?"
 
-**When called:** After Recommendation Agent.
+**When called:** After Recommendation Agent for `explore`/`related_topic` intents; runs directly on the reused, verbatim recommendation list for `roadmap` intent (Recommendation Agent is skipped in that case); skipped entirely for `general_chat` (decision D034).
 
 **Input:** `generate_path_plan(profile, recommendations, selected_override=None)` — `recommendations` is the *full recommendations dict* from the Recommendation Agent, not a single pre-selected career string. `selected_override`, when given, is a single recommendation item (same shape as one entry in `recommendations["recommendations"]`) that wins over the priority pick below.
 
-**Selection logic (decision D028, supersedes D018's priority-only rule):**
-1. **Explicit student choice, if present:** The orchestrator checks whether the student's current message names one of *last turn's* offered recommendations (`_match_previous_choice()` in `orchestrator.py`, word-boundary matched against titles stored via `MemoryAgent.remember_last_recommendations()`). If it matches, that exact item is passed in as `selected_override` and used directly — no re-ranking.
+**Selection logic (decision D034, supersedes D028's `_match_previous_choice()`):**
+1. **Explicit or implicit student reference, if resolved:** `IntentRouterAgent` (see section 4 above) resolves the student's message - by exact title or implicit reference ("same", "that one") using real conversation history - to an `anchor_title`, which the orchestrator looks up in `last_recommendations` and passes in as `selected_override` for `roadmap` intent. This is a strict superset of the old `_match_previous_choice()`, which could only recognize an exact, literal title mention with no visibility into conversation history at all.
 2. **Otherwise, fall back to the original priority order:** given `recommendations["recommendations"]` (already ranked by the Recommendation Agent), pick the highest-ranked `career` item if one exists; otherwise the highest-ranked `major`; otherwise the highest-ranked remaining item (in practice, a college pathway). This priority — career > major > college_pathway — exists because a roadmap anchored to a specific college reads oddly compared to one anchored to a career or major direction.
 
 **Output contract:**
@@ -425,11 +469,11 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 8. Guardrail Agent
+## 9. Guardrail Agent
 
 **Responsibility:** Rule-based, LLM-free post-generation safety check. Runs after Path Planning, before Evaluation. Scans the full turn's text (response, recommendation fields, path plan steps) for unsafe or overconfident language, and checks the profile for missing context that the response implicitly depends on.
 
-**When called:** After Path Planning Agent, before Evaluation Agent.
+**When called:** After Path Planning Agent, before Evaluation Agent. Runs on every turn regardless of intent (decision D034) - for `general_chat` and `roadmap`-without-a-fresh-list cases, `recommendations`/`path_plan` may be empty dicts, which every check handles gracefully via defensive `.get()` calls rather than assuming recommendation-shaped content.
 
 **Input:** `check_guardrails(response_payload, profile, user_message)` where `response_payload` is `{"response": str, "recommendations": <RecommendationAgent output>, "path_plan": <PathPlanningAgent output>}`.
 
@@ -470,13 +514,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 9. Evaluation Agent
+## 10. Evaluation Agent
 
 **Responsibility:** Scores every response using the **RASCEF** framework: Relevance, Accuracy/groundedness, Safety, Completeness, Explainability, Fairness — each 1–5, max 30. Primary path is GPT-4o as an LLM-as-judge; a rule-based evaluator is the fallback.
 
-**When called:** After Guardrail Agent, before Observability Agent. Called a second time, with a freshly regenerated `response_payload`/`guardrail_result`, if the critic/revision loop retries (see Orchestrator, decision D023) — at most twice per turn, never more.
+**When called:** After Guardrail Agent, before Observability Agent. Runs on every turn regardless of intent (decision D034). Called a second time, with a freshly regenerated `response_payload`/`guardrail_result`, if the critic/revision loop retries (see Orchestrator, decision D023) — at most twice per turn, never more.
 
-**Input:** `evaluate(user_message, response_payload, retrieved_context, profile, guardrail_result, input_guardrail_flags=None, revision_attempted=False)`. The last two are optional and exist solely to enrich the LangSmith trace (see Optional tracing below) — they play no role in scoring.
+**Input:** `evaluate(user_message, response_payload, retrieved_context, profile, guardrail_result, input_guardrail_flags=None, revision_attempted=False, is_general_chat=False)`. `input_guardrail_flags` and `revision_attempted` are optional and exist solely to enrich the LangSmith trace (see Optional tracing below) — they play no role in scoring. `is_general_chat=True` (set for `general_chat`-intent turns) adapts scoring so a free-form conversational answer isn't penalized for lacking recommendation structure it was never supposed to have: the LLM judge is told to score Completeness/Explainability on whether the answer addresses the question, not whether it lists formal recommendations, and the rule-based fallback switches to a separate heuristic (`_evaluate_rule_based_general_chat()`) based on response substance instead of `evidence`/`next_steps`/`why_it_fits` fields that would always be empty on this path.
 
 **Output contract:**
 ```json
@@ -519,7 +563,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ---
 
-## 10. Observability Agent
+## 11. Observability Agent
 
 **Responsibility:** Writes one row per turn to the local `observability_logs` SQLite table via `ObservabilityRepository`. Captures latency, models used, guardrail/evaluation results, and a real cost estimate (decision D029). Never raises — a logging failure must never break the student's response.
 

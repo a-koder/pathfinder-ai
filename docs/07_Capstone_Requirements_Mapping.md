@@ -22,7 +22,7 @@ The constraint that keeps this honest: positive framing has to be grounded in th
 |---|---|---|---|
 | Real-world problem | High school students lack structured, personalized career and college guidance | `docs/01_Product_Overview.md` | Student conversation showing non-obvious career discovery |
 | Target users | High school students (primary); parents and counselors (secondary) | `docs/01_Product_Overview.md` | Live demo with a realistic student profile |
-| Multi-agent design | 10 agents (Memory, Input Guardrail, Discovery, Retrieval, Recommendation, Path Planning, Guardrail, Evaluation, Observability, and the Orchestrator that coordinates them) | `src/agents/orchestrator.py`, `docs/09_Agent_Contracts.md` | Technical Details panel showing the agent flow for a single turn |
+| Multi-agent design | 11 agents (Memory, Input Guardrail, Intent Router, Discovery, Retrieval, Recommendation, Path Planning, Guardrail, Evaluation, Observability, and the Orchestrator that coordinates them) | `src/agents/orchestrator.py`, `docs/09_Agent_Contracts.md` | Technical Details panel showing the agent flow for a single turn |
 | RAG / grounded retrieval | Pinecone stores embeddings of careers, majors, colleges, and interest areas; retrieved context grounds every recommendation | `src/infrastructure/pinecone_client.py`, `src/services/retrieval_service.py`, `data/` | Retrieved documents shown in the trace panel |
 | Memory | SQLite stores student profile, conversation history, and session metadata across visits | `src/agents/memory_agent.py`, `src/repositories/` | Return as a returning student and show context pickup |
 | Guardrails | Pre-generation input checks (blocks on prompt-injection attempts only; profanity/frustration stay detection-only) plus post-generation checks blocking admission/salary guarantees and protected-attribute bias | `src/agents/guardrail_agent.py`, `src/agents/input_guardrail_agent.py` | Trigger a guardrail live and show the flag + note |
@@ -97,13 +97,13 @@ Stored in `data/interests.json` — a fourth dataset added after the original de
 
 Not: *"I built a chatbot that recommends careers."*
 
-Instead: *"I built PathFinder AI — a career discovery and college pathway guidance platform for high school students. The system demonstrates production-grade agentic AI patterns: RAG with Pinecone and OpenAI embeddings, SQLite memory for persistent student profiles, a 10-agent orchestration flow, layered input and output guardrails, RASCEF evaluation with LLM-as-judge and a bounded revision loop, per-turn observability with real cost tracking, and versioned, governed prompts. The high school student guidance domain is the use case; the AI system design patterns are the demonstration."*
+Instead: *"I built PathFinder AI — a career discovery and college pathway guidance platform for high school students. The system demonstrates production-grade agentic AI patterns: RAG with Pinecone and OpenAI embeddings, SQLite memory for persistent student profiles, an 11-agent orchestration flow, layered input and output guardrails, RASCEF evaluation with LLM-as-judge and a bounded revision loop, per-turn observability with real cost tracking, and versioned, governed prompts. The high school student guidance domain is the use case; the AI system design patterns are the demonstration."*
 
 ### The Patterns This Project Makes Concrete
 
 | AI Engineering Pattern | PathFinder AI Evidence |
 |---|---|
-| Multi-agent orchestration | 10 agents coordinated by a central orchestrator, with concurrency where it's safe (Discovery ‖ Retrieval) |
+| Multi-agent orchestration | 11 agents coordinated by a central orchestrator, with concurrency where it's safe (Discovery ‖ Intent Router) |
 | RAG with vector search | Pinecone indexes 223 curated documents across careers, majors, colleges, and interests |
 | Semantic retrieval | OpenAI `text-embedding-3-small` enables interest-based matching beyond keyword search |
 | Persistent memory | SQLite stores an evolving student profile and full conversation history across sessions |

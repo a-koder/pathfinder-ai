@@ -56,15 +56,29 @@ class RecommendationAgent:
         user_message: str,
         profile: dict,
         retrieved_context: dict,
+        anchor_context: str = "",
         usage: UsageTracker | None = None,
     ) -> dict:
-        """Runs GPT-4o-mini over the retrieved context and returns a RecommendationOutput-shaped dict."""
+        """Runs GPT-4o-mini over the retrieved context and returns a RecommendationOutput-shaped dict.
+        `anchor_context` (e.g. "Mental Health Counselor (career)") is set by the intent
+        router's related_topic flow so a follow-up like "colleges for same" stays grounded
+        in what was actually being discussed, instead of the model guessing from an
+        ambiguous message alone."""
         retrieved_documents = retrieved_context.get("retrieved_documents", [])
 
+        # history=[] is intentional, not the same gap decision D034 fixed: conversation-level
+        # context now flows through IntentRouterAgent -> anchor_context above, resolved once
+        # against the full history rather than re-dumped raw into every downstream prompt.
         context_block = self._prompts.build(profile=profile, retrieved_docs=retrieved_documents, history=[])
+        anchor_note = (
+            f"\n\nThis is a follow-up question specifically about: {anchor_context}. "
+            "Keep the recommendations grounded in and consistent with this topic."
+            if anchor_context else ""
+        )
         user_prompt = (
             f"Student message: {user_message}\n\n"
-            f"{context_block}\n\n"
+            f"{context_block}"
+            f"{anchor_note}\n\n"
             "Generate 3 to 5 grounded recommendations following the system instructions."
         )
 

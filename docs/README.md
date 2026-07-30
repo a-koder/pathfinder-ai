@@ -13,12 +13,13 @@ need from the table below.
 | **Solution Overview** | [`01_Product_Overview.md`](01_Product_Overview.md), [`07_Capstone_Requirements_Mapping.md`](07_Capstone_Requirements_Mapping.md) | What PathFinder AI actually does, target users, MVP scope and boundaries |
 | **Architecture** | [`04_Architecture.md`](04_Architecture.md), [`08_Diagrams.md`](08_Diagrams.md) | Clean Architecture's 6 layers, SOLID mapping, dependency flow, full per-turn data flow diagram, agent inventory |
 | **AI Concepts Used** | [`07_Capstone_Requirements_Mapping.md`](07_Capstone_Requirements_Mapping.md) ("Final Capstone Story"), [`14_Presentation_Deck.md`](14_Presentation_Deck.md) ("AI Concepts, Named" slide) | The named pattern list: multi-agent orchestration, RAG, memory, guardrails, evaluation, observability, prompt governance, structured outputs |
-| **Multi-Agent Design** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) | Persona, plus the full input/output contract, validation rules, and failure behavior for all 10 agents |
+| **Multi-Agent Design** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) | Persona, plus the full input/output contract, validation rules, and failure behavior for all 11 agents |
 | **RAG Pipeline** | [`13_RAG_Implementation.md`](13_RAG_Implementation.md), [`08_Diagrams.md`](08_Diagrams.md) §2 | Pinecone indexing strategy, metadata filtering, embedding model choice, local-fallback design |
 | **Memory** | Root [`README.md`](../README.md) "Memory" section, [`08_Diagrams.md`](08_Diagrams.md) §3, [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §2 | SQLite schema (`students`, `profiles`, `messages`, `conversation_summaries`, `observability_logs`), incremental profile-merge rules |
-| **Guardrails** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §3 (Input) and §8 (Output) | Full flag taxonomy for both guardrails, risk levels, what's detection-only vs. what changes the response |
-| **Evaluation** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §9, [`11_Test_Scenarios_and_Golden_Dataset.md`](11_Test_Scenarios_and_Golden_Dataset.md) | RASCEF's 6 dimensions, pass threshold, LLM-as-judge + rule-based fallback, golden test scenarios |
-| **Observability** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §10 | Per-turn logging schema, real per-model cost tracking, HITL feedback capture, optional LangSmith tracing |
+| **Guardrails** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §3 (Input) and §9 (Output) | Full flag taxonomy for both guardrails, risk levels, what's detection-only vs. what changes the response |
+| **Intent Routing** | Root [`README.md`](../README.md) "Intent Routing" section, [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §4 | The four intents (explore/roadmap/related_topic/general_chat), anchor resolution, why it replaced `_match_previous_choice()` (decision D034) |
+| **Evaluation** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §10, [`11_Test_Scenarios_and_Golden_Dataset.md`](11_Test_Scenarios_and_Golden_Dataset.md) | RASCEF's 6 dimensions, pass threshold, LLM-as-judge + rule-based fallback, golden test scenarios |
+| **Observability** | [`09_Agent_Contracts.md`](09_Agent_Contracts.md) §11 | Per-turn logging schema, real per-model cost tracking, HITL feedback capture, optional LangSmith tracing |
 | **Future Roadmap** | [`19_Future_Vision.md`](19_Future_Vision.md) | MCP integrations, provider-agnostic LLM support, deeper LangSmith usage, agent-to-agent interop (only if a real need shows up), and more — each tied to a concrete extension point in the current code |
 
 ---

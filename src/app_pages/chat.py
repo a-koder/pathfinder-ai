@@ -501,8 +501,10 @@ for msg in st.session_state.messages:
 # Handle new message
 user_message = st.chat_input("Ask PathFinder AI anything about careers, majors, or college pathways...")
 
-if user_message:
-    name = st.session_state.student_name.strip() if st.session_state.student_name.strip() else "Student"
+if user_message and not _current_name:
+    st.warning("Please enter your name above before starting a conversation.", icon=":material/person:")
+elif user_message:
+    name = _current_name
     user_timestamp = datetime.datetime.now()
 
     st.session_state.messages.append({

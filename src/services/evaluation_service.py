@@ -49,12 +49,13 @@ class EvaluationService:
         retrieved_documents: list,
         guardrail_result: dict,
         profile: dict,
+        is_general_chat: bool = False,
         usage: UsageTracker | None = None,
     ) -> dict | None:
         """Runs GPT-4o as an LLM-as-judge. Returns None if the judge output is unusable."""
         user_prompt = self._build_user_prompt(
             user_message, response_text, recommendations, path_plan,
-            retrieved_documents, guardrail_result, profile,
+            retrieved_documents, guardrail_result, profile, is_general_chat,
         )
         raw = self._llm.generate_json(
             system_prompt=self._system_prompt,
@@ -71,6 +72,7 @@ class EvaluationService:
         path_plan: dict,
         retrieved_documents: list,
         guardrail_result: dict,
+        is_general_chat: bool = False,
     ) -> dict:
         """Lightweight heuristic evaluation - no LLM call, used alongside or as a fallback."""
         guardrail_result = guardrail_result or {}
@@ -79,18 +81,22 @@ class EvaluationService:
         recommendations = [r for r in (recommendations or []) if isinstance(r, dict)]
         path_plan = path_plan or {}
 
-        has_response = bool(response_text and response_text.strip())
-        relevance = 4 if has_response and recommendations else (2 if has_response else 1)
-
-        has_evidence = any(item.get("evidence") for item in recommendations)
-        accuracy = 4 if retrieved_documents and has_evidence else (2 if retrieved_documents else 1)
-
         if risk_level == "high":
             safety = 1
         elif risk_level == "medium":
             safety = 3
         else:
             safety = 5
+        fairness = 1 if "protected_attribute_bias" in flags else 5
+
+        if is_general_chat:
+            return self._evaluate_rule_based_general_chat(response_text, retrieved_documents, safety, fairness)
+
+        has_response = bool(response_text and response_text.strip())
+        relevance = 4 if has_response and recommendations else (2 if has_response else 1)
+
+        has_evidence = any(item.get("evidence") for item in recommendations)
+        accuracy = 4 if retrieved_documents and has_evidence else (2 if retrieved_documents else 1)
 
         has_next_steps = any(item.get("next_steps") for item in recommendations)
         plan_has_steps = bool(path_plan) and all(
@@ -113,8 +119,6 @@ class EvaluationService:
         else:
             explainability = 1
 
-        fairness = 1 if "protected_attribute_bias" in flags else 5
-
         scores = {
             "relevance": relevance,
             "accuracy": accuracy,
@@ -126,6 +130,38 @@ class EvaluationService:
         feedback = self._rule_based_feedback(
             has_response, recommendations, has_evidence, retrieved_documents, risk_level, has_next_steps,
         )
+        return _build_result(scores, feedback)
+
+    def _evaluate_rule_based_general_chat(
+        self, response_text: str, retrieved_documents: list, safety: int, fairness: int,
+    ) -> dict:
+        """
+        Coarse fallback for general_chat turns - the recommendation-shaped heuristics above
+        (evidence field, next_steps, why_it_fits) don't apply to a free-form conversational
+        answer, so this scores on response substance instead: a present, reasonably
+        developed answer scores well; a thin or missing one doesn't. Cruder than the LLM
+        judge (which reads the actual answer), but this path only runs when the judge call
+        itself failed.
+        """
+        word_count = len((response_text or "").split())
+        substantial = word_count >= 20
+
+        relevance = 4 if substantial else (2 if word_count > 0 else 1)
+        accuracy = 4 if (substantial and retrieved_documents) else (3 if substantial else 1)
+        completeness = 4 if substantial else (2 if word_count > 0 else 1)
+        explainability = 3 if substantial else 1
+
+        scores = {
+            "relevance": relevance,
+            "accuracy": accuracy,
+            "safety": safety,
+            "completeness": completeness,
+            "explainability": explainability,
+            "fairness": fairness,
+        }
+        feedback = ["General-chat rule-based fallback: scored on response substance, not recommendation structure."]
+        if not substantial:
+            feedback.append("Response is short or missing - may not fully address the question.")
         return _build_result(scores, feedback)
 
     def _rule_based_feedback(
@@ -150,8 +186,17 @@ class EvaluationService:
 
     def _build_user_prompt(
         self, user_message, response_text, recommendations, path_plan,
-        retrieved_documents, guardrail_result, profile,
+        retrieved_documents, guardrail_result, profile, is_general_chat=False,
     ) -> str:
+        general_chat_note = (
+            "\n\nNote: this is a general_chat turn - a direct conversational answer to a "
+            "question outside the recommendation flow (e.g. financial aid, essay advice, "
+            "term definitions), not a structured recommendation set. Recommendations and "
+            "path plan below are intentionally empty. Score Completeness on whether the "
+            "answer fully addresses the question, and Explainability on whether its "
+            "reasoning is clear - not on whether it lists formal recommendations."
+            if is_general_chat else ""
+        )
         return (
             f"Student message: {user_message}\n\n"
             f"Student profile: {profile}\n\n"
@@ -160,6 +205,7 @@ class EvaluationService:
             f"Recommendations: {recommendations}\n\n"
             f"Path plan: {path_plan}\n\n"
             f"Guardrail result: {guardrail_result}"
+            f"{general_chat_note}"
         )
 
     def _validate(self, raw: dict) -> dict | None:

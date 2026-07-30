@@ -108,7 +108,7 @@ nothing about OpenAI or SQLite — it only talks to an Orchestrator. Agents depe
 service abstractions injected at construction time, so an agent's LLM call could be swapped
 from GPT-4o-mini to another provider without touching agent code. That's dependency
 inversion in practice, not just a slide term. On the right is the actual turn-by-turn flow —
-every one of the 10 agents in call order, which is what we'll walk through next.
+every one of the 11 agents in call order, which is what we'll walk through next.
 Transition: "Let's zoom into what happens on a single message."
 -->
 
@@ -116,19 +116,25 @@ Transition: "Let's zoom into what happens on a single message."
 
 # One Conversation Turn
 
-**Input Guardrail → Memory Load → Discovery ‖ Retrieval → Recommendation → Path Planning → Guardrail → Evaluation → (retry once, if needed) → Observability → Memory Save**
+**Input Guardrail → Memory Load → Discovery ‖ Intent Router → Retrieval/Recommendation/Path Planning (branches on intent) → Guardrail → Evaluation → (retry once, if needed) → Observability → Memory Save**
 
-- Discovery and Retrieval run **concurrently** — independent work, no wasted latency
+- Discovery and Intent Router run **concurrently** — independent work, no wasted latency
+- Intent Router (decision D034) classifies every turn as **explore** (new recommendations), **roadmap** (plan for something already offered — recommendations reused verbatim, not regenerated), **related_topic** (more info tied to an established anchor), or **general_chat** (a direct answer, no recommendation shape forced)
 - A low quality score triggers **one** automatic regenerate-and-recheck, never more
 
 <!--
-Speaker notes (35-45s):
-Every message goes through this exact sequence. Discovery (extracting interests, GPA,
-grade level) and Retrieval (semantic search) don't depend on each other, so they run on
-separate threads concurrently — shaving real latency off every turn for zero behavior
-change. If the quality score comes back low, the system regenerates once automatically —
-a bounded critic loop, not an infinite retry. This sequence is what makes PathFinder AI
-verifiably multi-agent, not one big prompt with section headers.
+Speaker notes (40-50s):
+Every message goes through this exact sequence, but not every message does the same work.
+Discovery and the new Intent Router run concurrently, since neither depends on the other's
+output. The router's job: figure out what kind of turn this actually is. Ask for new
+career ideas, and it's "explore" - the full pipeline runs. Ask for "a roadmap for that one"
+and it's "roadmap" - recommendations are reused verbatim, only the plan regenerates. Ask
+"colleges for same" and it's "related_topic" - grounded in whatever was just discussed, not
+a blind guess. Ask something like "what does deferred admission mean" and it's
+"general_chat" - answered directly, no recommendation format forced onto it. If the
+quality score comes back low, the system regenerates once automatically - a bounded critic
+loop, not an infinite retry. This branching is what makes PathFinder AI verifiably
+multi-agent, not one big prompt with section headers.
 Transition: "None of this matters if the recommendations aren't grounded in something real."
 -->
 
@@ -244,7 +250,7 @@ Transition: "Before the demo, here's the plain list of AI concepts all of that r
 
 ## AI Concepts, Named
 
-- **Multi-agent orchestration** — 10 agents, one central Orchestrator, no peer-to-peer agent calls
+- **Multi-agent orchestration** — 11 agents, one central Orchestrator, no peer-to-peer agent calls
 - **RAG** (Retrieval-Augmented Generation) — Pinecone + OpenAI embeddings ground every claim
 - **Persistent memory** — SQLite profile + conversation history survive across sessions
 - **Guardrails** — rule-based input/output safety checks, every single turn
@@ -289,16 +295,16 @@ Transition (after demo): "Let's close with where this stands and what's next."
 
 # Where It Stands
 
-- Verified with **13 scripted end-to-end/integration tests** across every agent
+- Verified with **14 scripted end-to-end/integration tests** across every agent
 - RASCEF pass threshold: **24/30** — auto-retry below that, always logged either way
-- **33 documented architecture decisions** (`D001`–`D033`), each with alternatives considered
+- **35 documented architecture decisions** (`D001`–`D035`), each with alternatives considered
 - Known gap, stated plainly: no automated `pytest` suite yet — verification is manual-script-based
 
 <!--
 Speaker notes (30-40s):
-A few honest numbers instead of a vibe: 13 scripted tests cover the full workflow, the
-revision loop, human feedback, prompt versioning, and observability, run against live
-APIs rather than mocks. Every architecture and product decision — 33 of them — is logged
+A few honest numbers instead of a vibe: 14 scripted tests cover the full workflow, the
+revision loop, human feedback, prompt versioning, intent-routing accuracy, and observability,
+run against live APIs rather than mocks. Every architecture and product decision — 35 of them — is logged
 with what alternative was considered and why it lost, which is what makes this auditable
 rather than "trust me." And I'll say the quiet part out loud: there's no automated pytest
 suite yet, verification today is manual-script-based. That's a real gap, not glossed over.
@@ -317,7 +323,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 
 | Category | Implemented | Evidence |
 |---|---|---|
-| Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
+| Multi-Agent | ✅ | 11 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
 | Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
 | RAG | ✅ | Pinecone + OpenAI embeddings, 223 docs, metadata filtering (incl. state/budget-aware college search, D033), tested local fallback |
 | Guardrails | ✅ | Output guardrails enforce (all 10 flags reachable as of D033 - the budget/location flags can now both fire and clear on real profile data); input guardrails block on prompt-injection, detect-only on profanity/frustration by design |
@@ -560,13 +566,14 @@ Applying just #1 (skip 13–16) comfortably brings a timed talk to ~11.5–13 mi
 
 ## Appendix E — Agent Roster (Backup Slide)
 
-*Not part of the main flow — pull this up only if asked "what are the 10 agents, exactly?"*
+*Not part of the main flow — pull this up only if asked "what are the 11 agents, exactly?"*
 
 | Agent | Purpose |
 |---|---|
 | Orchestrator | Coordinates the full turn; applies the one-retry critic/revision loop |
 | Input Guardrail | Flags profanity, frustration (detection only) — blocks the turn on prompt-injection |
 | Memory | Loads, merges, and persists student profile + conversation history |
+| Intent Router | Classifies each turn (explore / roadmap / related_topic / general_chat) and resolves implicit references ("same", "that one") to what was actually offered last turn |
 | Discovery | Extracts profile fields from the student's latest message |
 | Retrieval | Semantic search over the knowledge base via Pinecone |
 | Recommendation | Generates 3–5 grounded career/major/college options |

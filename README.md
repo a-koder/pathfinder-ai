@@ -22,31 +22,40 @@ Clean Architecture, six layers, explicit constructor injection, no agent framewo
 
 ```
 Presentation   src/app.py                Streamlit UI — no business logic
-Application    src/agents/                10 agents + orchestrator
+Application    src/agents/                11 agents + orchestrator
 Service        src/services/              LLM, embeddings, retrieval, prompts, evaluation, tracing
 Repository     src/repositories/          All SQL lives here
 Infrastructure src/infrastructure/        Only layer that imports openai / pinecone / sqlite3 / langsmith
 Domain         src/schemas/models.py      Reference Pydantic models
 ```
 
-Every conversation turn runs the same fixed pipeline:
+Every conversation turn runs the same first few steps, then branches on intent (decision D034):
 
 ```
 Student message
   → Input Guardrail Agent (flag profanity / frustration / prompt injection - runs first,
     before memory load, since it only needs the raw message)
   → Memory Agent (load profile + history)
-  → Discovery Agent (extract profile updates) ┐  run concurrently on worker threads -
-  → Retrieval Agent (Pinecone RAG, top-k=5)    ┘  neither depends on the other's output
+  → Discovery Agent (extract profile updates)   ┐  run concurrently on worker threads -
+  → Intent Router Agent (classify the turn)     ┘  neither depends on the other's output
   → Memory Agent (merge + persist profile, after both threads join)
-  → Recommendation Agent (3-5 grounded career/major/college options)
-  → Path Planning Agent (phased roadmap for the top option)
-  → Guardrail Agent (rule-based safety check)
-  → Evaluation Agent (RASCEF quality score, traced to LangSmith if configured)
-  → [critic/revision loop: if score < 24, regenerate recommendation → path plan → guardrail → evaluation once]
+  → Resolve the router's anchor_title against the merged profile's last_recommendations
+  → Branch on intent:
+      "roadmap"       → skip Retrieval + Recommendation; reuse last turn's items verbatim;
+                         Path Planning builds a roadmap around the resolved anchor
+      "general_chat"  → Retrieval only if relevant (no anchor); a direct conversational
+                         answer; no Recommendation, no Path Planning
+      "explore" /
+      "related_topic" → Retrieval (related_topic adds the anchor as grounding context)
+                         → Recommendation (3-5 grounded options) → Path Planning (roadmap
+                         for the top option)
+  → Guardrail Agent (rule-based safety check, every branch)
+  → Evaluation Agent (RASCEF quality score, every branch - general_chat scored on answer
+    substance rather than recommendation structure; traced to LangSmith if configured)
+  → [critic/revision loop: if score < 24, re-run only the branch that ran above, once]
   → Enrichment (fun facts + future outlook added per recommendation, display-only)
   → Observability Agent (log the turn)
-  → Memory Agent (save the turn)
+  → Memory Agent (save the turn; last_recommendations only updated outside general_chat)
   → Response + trace → Streamlit UI
 ```
 
@@ -75,17 +84,33 @@ Full contracts for every agent: `docs/09_Agent_Contracts.md`. Full architecture 
 | Orchestrator | Runs the fixed pipeline above; assembles the final response and trace; runs the critic/revision retry |
 | Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags); runs first, before memory load; blocks the turn only on `prompt_injection_detected`, profanity/frustration remain detection-only |
 | Memory Agent | Loads/merges/persists the student profile and message history |
-| Discovery Agent | Extracts profile fields from the latest message only; never invents GPA or grade level; runs concurrently with Retrieval |
-| Retrieval Agent | Semantic search over the knowledge base via Pinecone; runs concurrently with Discovery |
-| Recommendation Agent | 3-5 grounded career/major/college recommendations, each with why-it-fits, why-exciting, opportunities, risks, and next steps |
-| Path Planning Agent | Turns the top recommendation into a phased roadmap |
-| Guardrail Agent | Rule-based post-generation safety check (10 flags) |
-| Evaluation Agent | RASCEF quality score via GPT-4o judge, with a rule-based fallback; runs again if the critic/revision loop retries |
+| Intent Router Agent | Classifies each turn as explore/roadmap/related_topic/general_chat and resolves implicit references ("same", "that one") against last turn's offered items, using real conversation history; runs concurrently with Discovery |
+| Discovery Agent | Extracts profile fields from the latest message only; never invents GPA or grade level; runs concurrently with Intent Router |
+| Retrieval Agent | Semantic search over the knowledge base via Pinecone; skipped for "roadmap", anchor-grounded for "related_topic" |
+| Recommendation Agent | 3-5 grounded career/major/college recommendations, each with why-it-fits, why-exciting, opportunities, risks, and next steps; skipped for "roadmap"/"general_chat" |
+| Path Planning Agent | Turns the top (or anchor-resolved) recommendation into a phased roadmap; skipped for "general_chat" |
+| Guardrail Agent | Rule-based post-generation safety check (10 flags); runs on every turn regardless of intent |
+| Evaluation Agent | RASCEF quality score via GPT-4o judge, with a rule-based fallback; runs on every turn regardless of intent, and again if the critic/revision loop retries |
 | Observability Agent | Writes one row per turn to SQLite; returns the row's `log_id` for HITL feedback |
 
 Each agent is a small class receiving its dependencies via constructor injection — no agent instantiates its own OpenAI/Pinecone/SQLite client. See `docs/09_Agent_Contracts.md` for exact input/output shapes.
 
-**Parallelization:** Discovery and Retrieval run concurrently on worker threads (`concurrent.futures.ThreadPoolExecutor`) instead of sequentially. Both depend only on the state Memory Load already produced — Discovery needs the pre-turn profile, Retrieval only needs the raw message — and neither depends on the other's output, so there's no behavior change from running them in parallel, only reduced latency (roughly the smaller of the two calls' duration per turn, since both are I/O-bound OpenAI/Pinecone calls).
+**Parallelization:** Discovery and Intent Router run concurrently on worker threads (`concurrent.futures.ThreadPoolExecutor`) instead of sequentially. Both depend only on the state Memory Load already produced — Discovery needs the pre-turn profile, Intent Router needs that same pre-turn profile's `last_recommendations` plus recent conversation history — and neither depends on the other's output, so there's no behavior change from running them in parallel, only reduced latency. Retrieval runs afterward, not in this pair, since whether it runs at all - and what grounding it gets - depends on the intent that was just resolved (decision D034).
+
+---
+
+## Intent Routing
+
+Every message used to be forced through the same "generate new recommendations" pipeline, regardless of what the student was actually asking. Decision D034 fixed that: `IntentRouterAgent` classifies each turn — using recent conversation history and last turn's offered titles, not just the raw message — into one of four intents:
+
+- **`explore`** — new recommendations (today's default pipeline: Retrieval → Recommendation → Path Planning)
+- **`roadmap`** — a plan for something already offered, named exactly or implicitly ("that one", "the same one"). Recommendations are reused verbatim (nothing about them was wrong); only a fresh roadmap is generated, anchored to the resolved item
+- **`related_topic`** — more information (career or college) tied to an established anchor, e.g. "colleges for same." Retrieval and Recommendation still run, but grounded by the resolved anchor's title/type instead of guessing blind from an ambiguous message
+- **`general_chat`** — a genuine question outside the recommendation flow (FAFSA, essay advice, term definitions). Answered directly and conversationally — grounded by RAG when the knowledge base is actually relevant, but never forced into the structured recommendation JSON shape. No Recommendation or Path Planning call at all
+
+An anchor resolved with low confidence, or that doesn't match anything actually offered last turn, falls back to `explore` rather than guessing — see `IntentRouterAgent._validate()`. Guardrail and RASCEF evaluation run on every intent, unmodified in scope; only the generation work differs. `last_recommendations` is left untouched after a `general_chat` turn, so a side question mid-conversation doesn't erase the ability to refer back to what was being discussed.
+
+This replaces the old `_match_previous_choice()` (D028) outright: that mechanism could only recognize an *exact, literal* title mention in the message, with zero visibility into conversation history — it had no way to resolve "same," "that one," or any other implicit reference, which is exactly the failure mode that motivated D034.
 
 ---
 
@@ -119,7 +144,7 @@ Full design rationale (why one namespace, why metadata filtering over multiple i
 
 ## Input + Output Guardrails
 
-**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). `profanity_detected` and `frustration_detected` remain detection-only — flags are recorded on the turn and shown in the trace, but the conversation proceeds unchanged. `prompt_injection_detected` is the exception: the turn short-circuits immediately after memory load, before Discovery/Retrieval/Recommendation ever run, and returns a fixed safe response instead — no LLM call is made, so a blocked turn costs $0.00. The check itself still runs before memory load, since it's a pure function of the raw message with no dependency on stored state; the block is applied right after memory load (see `docs/09_Agent_Contracts.md` for the exact sequencing).
+**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). `profanity_detected` and `frustration_detected` remain detection-only — flags are recorded on the turn and shown in the trace, but the conversation proceeds unchanged. `prompt_injection_detected` is the exception: the turn short-circuits immediately after memory load, before Intent Router/Discovery/Retrieval/Recommendation ever run, and returns a fixed safe response instead — no LLM call is made, so a blocked turn costs $0.00. The check itself still runs before memory load, since it's a pure function of the raw message with no dependency on stored state; the block is applied right after memory load (see `docs/09_Agent_Contracts.md` for the exact sequencing).
 
 **Output Guardrails:** rule-based, no LLM call. Scans the full turn's text for unsafe language and checks the profile for context the response implicitly depends on:
 
@@ -180,7 +205,7 @@ LANGSMITH_TRACING=true
 
 Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. `TracingService` (`src/services/tracing_service.py`) owns that safety wrapper, governance-metadata enrichment, and the lazy singleton client; it delegates the actual SDK call to `LangSmithClient` (`src/infrastructure/langsmith_client.py`), the same pattern every other external dependency (OpenAI, Pinecone, SQLite) follows. When enabled, every trace is auto-enriched with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
 
-**Scope:** every agent in the "one turn, in order" sequence traces itself — Input Guardrail, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation — each receiving the same shared `TracingService` instance via constructor injection, exactly like `LLMService` or `RetrievalService` are injected elsewhere. Memory Agent and Observability Agent are deliberately excluded: they're bookkeeping steps already logged to SQLite, not AI decision points LangSmith is meant to explain. Because tracing is a constructor dependency rather than a bare module import, adding it to a new stage later means passing `tracing_service=_tracing_service` at the wiring site in `orchestrator.py`, not editing `tracing_service.py` itself.
+**Scope:** every agent in the "one turn, in order" sequence traces itself — Input Guardrail, Intent Router, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation — each receiving the same shared `TracingService` instance via constructor injection, exactly like `LLMService` or `RetrievalService` are injected elsewhere. Memory Agent and Observability Agent are deliberately excluded: they're bookkeeping steps already logged to SQLite, not AI decision points LangSmith is meant to explain. Because tracing is a constructor dependency rather than a bare module import, adding it to a new stage later means passing `tracing_service=_tracing_service` at the wiring site in `orchestrator.py`, not editing `tracing_service.py` itself.
 
 **Every trace fires on a background thread, not inline.** A measured direct call to LangSmith's `create_run()` takes ~80-1000ms; blocking on that seven times per turn would add real, visible latency to every response. `TracingService.trace_event()` builds the trace payload on the caller's thread (cheap, no I/O) and submits the actual network call to a small shared `ThreadPoolExecutor`, returning immediately — measured at ~1-8ms per call after this change, versus ~80-1000ms before. Nothing in the same turn depends on a trace's return value, so there's no correctness cost to not waiting for it; a slow or unreachable LangSmith degrades to "the trace arrives late" instead of "the turn gets slower."
 
@@ -222,6 +247,7 @@ No `pytest` suite — verification is via standalone scripts in `src/scripts/` t
 .venv_win\Scripts\python.exe src/scripts/test_prompt_versioning.py       # Prompts load, agents run, versions reach the result
 .venv_win\Scripts\python.exe src/scripts/test_human_feedback.py          # HITL feedback capture end to end
 .venv_win\Scripts\python.exe src/scripts/test_revision_loop.py           # Critic/revision loop: low score retries once, never more
+.venv_win\Scripts\python.exe src/scripts/test_intent_router.py           # Intent Router golden-dataset accuracy: confusion matrix + per-class precision/recall/F1
 ```
 
 `docs/11_Test_Scenarios_and_Golden_Dataset.md` has 10 mock student profiles and 9 manual-review scenarios for prompt tuning and pre-demo review.
@@ -242,9 +268,8 @@ Three scenarios, chosen to each showcase a different part of the system in one t
 
 - `src/schemas/models.py` Pydantic models have drifted from the actual dict shapes agents pass around — no runtime validation layer enforces them today (see `docs/09_Agent_Contracts.md`)
 - `DiscoveryAgent` doesn't yet extract `college_type_preference` / `pathway_preference` — those two profile fields stay empty unless populated some other way (`location_preference` / `budget_preference` are extracted as of prompt v2, see `docs/12_DECISION_LOG.md` D033)
-- No `out_of_scope` guardrail (e.g. scholarship/FAFSA questions aren't redirected — they're passed to the Recommendation Agent, which will attempt a weak, ungrounded answer)
 - No automated `pytest` suite — verification is via the scripts above, run manually against live APIs
-- Name-based student recognition only — no authentication, not suitable for real student data
+- Name-based student recognition only — no authentication, not suitable for real student data (see "Real Authentication (OAuth/SSO)" in `docs/19_Future_Vision.md`)
 - `feedback_text` (free-text HITL comment) has no UI entry point yet — only the 👍/👎 buttons are wired; the column is only reachable with free text via `ObservabilityRepository` directly or `test_human_feedback.py`
 
 ---
@@ -308,7 +333,7 @@ pathfinder-ai/
 ├── src/
 │   ├── app.py                    # Streamlit UI
 │   ├── config.py                 # Environment variables
-│   ├── agents/                   # 10 agents + orchestrator
+│   ├── agents/                   # 11 agents + orchestrator
 │   ├── services/                 # LLM, embeddings, retrieval, prompts, evaluation, tracing
 │   ├── repositories/              # All SQL
 │   ├── infrastructure/           # OpenAI, Pinecone, SQLite, KnowledgeLoader, LangSmith adapters

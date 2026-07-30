@@ -13,9 +13,10 @@ flowchart LR
     subgraph STEPS ["One turn, in order"]
         direction LR
         IGA["Input\nGuardrail"] --> MEM["Memory\n(load)"]
-        MEM --> PAR["Discovery ‖ Retrieval\n(concurrent)"]
-        PAR --> REC["Recommendation"]
-        REC --> PLAN["Path\nPlanning"]
+        MEM --> PAR["Discovery ‖ Intent Router\n(concurrent)"]
+        PAR --> RET["Retrieval\n(skipped for roadmap)"]
+        RET --> REC["Recommendation\n(skipped for roadmap/general_chat)"]
+        REC --> PLAN["Path Planning\n(skipped for general_chat)"]
         PLAN --> GRD["Guardrail\n(safety check)"]
         GRD --> EVAL["Evaluation\n(RASCEF score)"]
     end
@@ -23,7 +24,7 @@ flowchart LR
     STEPS --> UI
 ```
 
-Every box above is one of the 10 agents; every diagram below zooms into one part of this same path. Section 1 gives the exact sequence with the critic/revision retry, and Sections 2-6 go deep on one piece each (RAG, memory, guardrails, observability, prompt governance).
+Every box above is one of the 11 agents; every diagram below zooms into one part of this same path. Section 1 gives the exact sequence with the critic/revision retry, and Sections 2-6 go deep on one piece each (RAG, memory, guardrails, observability, prompt governance).
 
 ---
 
@@ -38,6 +39,7 @@ sequenceDiagram
     participant ORC as Orchestrator
     participant IGA as Input Guardrail Agent
     participant MA as Memory Agent
+    participant IRA as Intent Router Agent
     participant DA as Discovery Agent
     participant RETA as Retrieval Agent
     participant EMB as OpenAI Embeddings
@@ -56,49 +58,59 @@ sequenceDiagram
     IGA-->>ORC: Flags (profanity/frustration detection only; prompt_injection blocks)
 
     ORC->>MA: Load student profile and conversation summary
-    MA-->>ORC: Profile JSON + last 10 messages
+    MA-->>ORC: Profile JSON + last 20 messages
 
     opt prompt_injection_detected fired
         ORC-->>UI: Return fixed safe response immediately - no LLM call, $0.00
-        Note over ORC: Discovery/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation all skipped
+        Note over ORC: Discovery/Intent Router/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation all skipped
     end
 
-    par Discovery and Retrieval run concurrently
+    par Discovery and Intent Router run concurrently
         ORC->>DA: Update student understanding
-        DA-->>ORC: Updated profile fields (interests, GPA, grade)
+        DA-->>ORC: Updated profile fields (interests, GPA, grade, location/budget preference)
     and
-        ORC->>RETA: Build retrieval query from message
-        RETA->>EMB: Embed retrieval query
-        EMB-->>RETA: Query vector
-        RETA->>PC: Search top-k relevant documents
-        PC-->>RETA: Career / Major / College context
-        RETA-->>ORC: Retrieved documents
+        ORC->>IRA: Classify intent (recent conversation + last turn's offered titles)
+        IRA-->>ORC: intent (explore/roadmap/related_topic/general_chat) + anchor_title
     end
 
     ORC->>MA: Merge profile updates + persist
     MA-->>ORC: Merged profile
 
-    Note over ORC: Does this message name one of LAST turn's offered<br/>recommendations? (decision D028) If so, remember it as<br/>selected_override for Path Planning below.
+    Note over ORC: Resolve anchor_title against the merged profile's<br/>last_recommendations (decision D034). Falls back to<br/>"explore" if it can't be confidently resolved.
 
-    ORC->>RA: Generate grounded response
-    Note over ORC,RA: System prompt includes profile + retrieved context + history
-    RA-->>ORC: Draft recommendations
-
-    ORC->>PPA: Build phased roadmap<br/>(selected_override if the student named one, else top recommendation)
-    PPA-->>ORC: Roadmap
+    alt intent == roadmap
+        Note over ORC: Skip Retrieval and Recommendation entirely -<br/>nothing new needs grounding.
+        ORC->>PPA: Build roadmap around the resolved anchor item
+        PPA-->>ORC: Roadmap
+        Note over ORC: Response text: "Here's your roadmap for &lt;anchor&gt;."<br/>Recommendation cards are last turn's items, unchanged.
+    else intent == general_chat
+        ORC->>RETA: Retrieve context if relevant (no anchor)
+        RETA-->>ORC: Retrieved documents (may be empty)
+        ORC->>RA: (skipped - no structured recommendations for this turn)
+        Note over ORC: Direct conversational answer, grounded by profile +<br/>history + retrieved context when relevant - no roadmap.
+    else intent == explore or related_topic
+        ORC->>RETA: Search (related_topic passes anchor_title/type as extra grounding)
+        RETA->>EMB: Embed retrieval query (+ anchor context if set)
+        EMB-->>RETA: Query vector
+        RETA->>PC: Search non-colleges + colleges (state/gpa_band filtered, decision D033)
+        PC-->>RETA: Career / Major / College context
+        RETA-->>ORC: Retrieved documents
+        ORC->>RA: Generate grounded recommendations
+        Note over ORC,RA: System prompt includes profile + retrieved context<br/>+ anchor context (related_topic only)
+        RA-->>ORC: Draft recommendations
+        ORC->>PPA: Build phased roadmap (top recommendation)
+        PPA-->>ORC: Roadmap
+    end
 
     ORC->>GA: Check response for unsafe claims
     GA-->>ORC: Guardrail flags (if any)
 
-    ORC->>EA: Score response quality (RASCEF)
+    ORC->>EA: Score response quality (RASCEF; general_chat scored on answer<br/>substance, not recommendation structure)
     EA-->>ORC: Dimension scores (out of 30)
     EA->>LS: Trace (prompt versions, score, badge, guardrail + input guardrail flags)
 
     alt total_score < 24 (critic / revision loop, max 1 retry)
-        ORC->>RA: Regenerate recommendation
-        RA-->>ORC: New draft
-        ORC->>PPA: Regenerate roadmap
-        PPA-->>ORC: New roadmap
+        Note over ORC: Re-runs only the branch that ran above (roadmap only<br/>retries Path Planning; general_chat only retries the answer)
         ORC->>GA: Re-check response
         GA-->>ORC: Guardrail flags (if any)
         ORC->>EA: Re-score (max one retry, accepted either way)
@@ -106,8 +118,10 @@ sequenceDiagram
         EA->>LS: Trace (revision_attempted: true)
     end
 
-    ORC->>MA: Remember this turn's offered recommendations<br/>(for next turn's choice matching)
-    MA-->>ORC: Confirmed
+    opt intent != general_chat
+        ORC->>MA: Remember this turn's offered recommendations<br/>(for the next turn's intent routing)
+        MA-->>ORC: Confirmed
+    end
 
     ORC->>OL: Record latency, scores, flags, prompt versions
     OL-->>ORC: log_id
@@ -247,8 +261,8 @@ erDiagram
 flowchart TD
     MSG["Raw Student Message"]
     IG{"Input Guardrail\nprofanity / frustration /\nprompt-injection?"}
-    BLOCKED["Fixed safe response returned\nNo LLM call - $0.00 cost\nDiscovery/Retrieval/Recommendation/\nPath Planning/Guardrail/Evaluation all skipped"]
-    GEN["Recommendation + Path Planning\nfrom GPT-4o-mini"]
+    BLOCKED["Fixed safe response returned\nNo LLM call - $0.00 cost\nIntent Router/Discovery/Retrieval/Recommendation/\nPath Planning/Guardrail/Evaluation all skipped"]
+    GEN["Intent-routed generation (D034):\nRecommendation + Path Planning (explore/related_topic),\nPath Planning only (roadmap, reused recs),\nor a direct answer (general_chat)"]
 
     subgraph Guardrails ["Output Guardrail — 10 Rule-Based Flags"]
         G1["High risk: admission_guarantee,\nsalary_guarantee, protected_attribute_bias"]

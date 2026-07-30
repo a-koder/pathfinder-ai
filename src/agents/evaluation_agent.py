@@ -43,6 +43,7 @@ class EvaluationAgent:
         guardrail_result: dict,
         input_guardrail_flags: list | None = None,
         revision_attempted: bool = False,
+        is_general_chat: bool = False,
         usage: UsageTracker | None = None,
     ) -> dict:
         response_text = response_payload.get("response", "")
@@ -58,7 +59,7 @@ class EvaluationAgent:
 
         result = self._evaluate_with_fallback(
             user_message, response_text, recommendation_items, path_plan,
-            retrieved_documents, guardrail_result, profile, usage,
+            retrieved_documents, guardrail_result, profile, is_general_chat, usage,
         )
 
         self._trace(
@@ -70,7 +71,7 @@ class EvaluationAgent:
 
     def _evaluate_with_fallback(
         self, user_message, response_text, recommendation_items, path_plan,
-        retrieved_documents, guardrail_result, profile, usage=None,
+        retrieved_documents, guardrail_result, profile, is_general_chat=False, usage=None,
     ) -> dict:
         try:
             judged = self._evaluation_service.evaluate_with_llm_judge(
@@ -81,6 +82,7 @@ class EvaluationAgent:
                 retrieved_documents=retrieved_documents,
                 guardrail_result=guardrail_result,
                 profile=profile,
+                is_general_chat=is_general_chat,
                 usage=usage,
             )
             if judged is not None:
@@ -95,6 +97,7 @@ class EvaluationAgent:
                 path_plan=path_plan,
                 retrieved_documents=retrieved_documents,
                 guardrail_result=guardrail_result,
+                is_general_chat=is_general_chat,
             )
             # Rule-based-only results never get the top badge - the LLM judge didn't confirm it.
             if fallback["quality_badge"] == "green":

@@ -121,22 +121,28 @@ class RetrievalAgent:
         user_message: str,
         profile: dict,
         top_k: int = 5,
+        anchor_context: str = "",
         usage: UsageTracker | None = None,
     ) -> dict:
         """Runs a non-college search plus a location/budget-aware college search and
-        returns a RetrievalOutput-shaped dict."""
+        returns a RetrievalOutput-shaped dict. `anchor_context` (e.g. "Mental Health
+        Counselor (career)") is used by the intent router's related_topic flow to ground
+        an ambiguous follow-up ("colleges for same") in what it actually refers to - it's
+        folded into the embedding search text only, never into the displayed `query`
+        field, so the turn's record of what the student literally asked stays accurate."""
         profile = profile or {}
         state = _infer_state_code(profile.get("location_preference", ""))
         budget_preference = profile.get("budget_preference", "")
+        search_text = f"{user_message} {anchor_context}".strip() if anchor_context else user_message
 
         college_slots = min(_MAX_COLLEGE_SLOTS, top_k)
         non_college_slots = top_k - college_slots
 
         non_college_docs = self._retrieval_service.search_non_colleges(
-            user_message, top_k=non_college_slots, usage=usage,
+            search_text, top_k=non_college_slots, usage=usage,
         ) if non_college_slots > 0 else []
         college_candidates = self._retrieval_service.search_colleges(
-            user_message, top_k=college_slots * _CANDIDATE_POOL_MULTIPLIER, state=state, usage=usage,
+            search_text, top_k=college_slots * _CANDIDATE_POOL_MULTIPLIER, state=state, usage=usage,
         ) if college_slots > 0 else []
 
         normalized_colleges = _rank_colleges(

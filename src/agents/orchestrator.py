@@ -1,5 +1,4 @@
 import concurrent.futures
-import re
 import time
 from datetime import datetime, timezone
 
@@ -17,12 +16,14 @@ from services.embedding_service import EmbeddingService
 from services.retrieval_service import RetrievalService
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
+from services.prompt_loader import load_prompt
 from services.evaluation_service import EvaluationService
 from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 from agents.memory_agent import MemoryAgent
 from agents.input_guardrail_agent import InputGuardrailAgent
+from agents.intent_router_agent import IntentRouterAgent
 from agents.discovery_agent import DiscoveryAgent
 from agents.retrieval_agent import RetrievalAgent
 from agents.recommendation_agent import RecommendationAgent
@@ -60,6 +61,7 @@ _tracing_service = TracingService()
 # logged to SQLite, not AI decision points LangSmith is meant to explain.
 _memory = MemoryAgent(_student_repo, _profile_repo, _message_repo, _summary_repo)
 _input_guardrail = InputGuardrailAgent(tracing_service=_tracing_service)
+_intent_router = IntentRouterAgent(_llm_service, tracing_service=_tracing_service)
 _discovery = DiscoveryAgent(_llm_service, tracing_service=_tracing_service)
 _retrieval = RetrievalAgent(_retrieval_service, tracing_service=_tracing_service)
 _recommendation = RecommendationAgent(_llm_service, _prompt_service, tracing_service=_tracing_service)
@@ -134,6 +136,59 @@ def _format_response_text(student_name: str, recommendations: dict) -> str:
     return "\n".join(lines).strip()
 
 
+def _format_roadmap_only_response_text(student_name: str, anchor_title: str) -> str:
+    """Used for the intent router's "roadmap" flow: the recommendation cards are reused
+    verbatim (rendered separately by the UI), so the response text just introduces the
+    roadmap instead of re-listing why_it_fits/why_exciting/next_steps for every card again."""
+    greeting = f"Thanks, {student_name}!" if student_name else "Thanks!"
+    return f"{greeting} Here's your roadmap for {anchor_title}."
+
+
+_GENERAL_CHAT_SYSTEM_PROMPT = load_prompt("general_chat", config.GENERAL_CHAT_PROMPT_VERSION)
+
+
+def _generate_general_chat_response(
+    user_message: str,
+    profile: dict,
+    recent_messages: list[dict],
+    retrieved_context: dict,
+    usage: UsageTracker | None = None,
+) -> str:
+    """
+    Used for the intent router's "general_chat" flow: a direct conversational answer to a
+    question outside the recommendation/roadmap flow (FAFSA, essay advice, term
+    definitions), grounded by retrieved knowledge-base context when actually relevant and
+    by recent conversation history for continuity, but never forced into the structured
+    recommendation JSON shape. Traced like every other reasoning stage (Discovery, Intent
+    Router, Retrieval, Recommendation, Path Planning, Guardrail, Evaluation) - this was
+    the one stage without a trace_event call until decision D035 caught the gap.
+    """
+    retrieved_documents = (retrieved_context or {}).get("retrieved_documents", [])
+    history_lines = [f"- {m.get('role', 'user')}: {m.get('content', '')}" for m in (recent_messages or [])[-6:]]
+    history_block = "\n".join(history_lines) if history_lines else "(no prior conversation)"
+    doc_titles = [d.get("title", "") for d in retrieved_documents if d.get("title")]
+    context_block = f"Possibly relevant knowledge-base topics: {', '.join(doc_titles)}" if doc_titles else (
+        "No closely relevant knowledge-base documents were retrieved for this question."
+    )
+
+    user_prompt = (
+        f"Student profile: {profile}\n\n"
+        f"Recent conversation:\n{history_block}\n\n"
+        f"{context_block}\n\n"
+        f"Student's question: {user_message}"
+    )
+    response_text = _llm_service.generate_text(
+        system_prompt=_GENERAL_CHAT_SYSTEM_PROMPT, user_prompt=user_prompt, usage=usage,
+    )
+    _tracing_service.trace_event(
+        name="general_chat",
+        inputs={"user_message": user_message, "retrieved_document_count": len(retrieved_documents)},
+        outputs={"response": response_text},
+        metadata={"retrieved_titles": doc_titles},
+    )
+    return response_text
+
+
 _ENRICHMENT_SYSTEM_PROMPT = (
     "You add short, engaging, positively-framed enrichment to a list of career, major, or "
     "college recommendations for a high school student. For each title given, provide: "
@@ -182,27 +237,6 @@ def _enrich_recommendations(recommendation_items: list[dict], usage: UsageTracke
     return enriched
 
 
-def _match_previous_choice(user_message: str, previous_recommendations: list[dict]) -> dict | None:
-    """
-    Checks whether the student's message names one of the recommendations offered last
-    turn (e.g. replying to "Which of these resonates most with you?" with "the wildlife
-    biologist one"). Word-boundary matched so a short title like "Art" doesn't false-hit
-    inside "smart". Returns the matching item (same shape as a RecommendationAgent item,
-    since it IS one, stored verbatim by remember_last_recommendations) so PathPlanningAgent
-    can build a roadmap around exactly what the student picked, instead of the
-    career > major > college_pathway priority guess. None if nothing matches.
-    """
-    if not user_message or not previous_recommendations:
-        return None
-
-    message_lower = user_message.lower()
-    for item in previous_recommendations:
-        title = (item.get("title") or "").strip() if isinstance(item, dict) else ""
-        if title and re.search(r"\b" + re.escape(title.lower()) + r"\b", message_lower):
-            return item
-    return None
-
-
 def _generate_and_score(
     student_name: str,
     user_message: str,
@@ -210,30 +244,65 @@ def _generate_and_score(
     retrieval: dict,
     input_guardrail_flags: list,
     revision_attempted: bool,
+    mode: str = "explore",
     selected_override: dict | None = None,
+    reused_recommendation_items: list[dict] | None = None,
+    anchor_context: str = "",
+    recent_messages: list[dict] | None = None,
     usage: UsageTracker | None = None,
 ) -> tuple[dict, dict, str, dict, dict, dict]:
     """
-    Runs one full generate-and-check attempt: recommendation -> path planning -> response
-    assembly -> post-generation guardrails -> RASCEF evaluation. Used for both the initial
-    attempt and the single critic/revision retry, so both attempts go through identical logic.
-    Both attempts record into the same `usage` tracker, so a retry's tokens are counted too.
+    Runs one full generate-and-check attempt, branching on the intent router's decision
+    (decision D034):
+      - "explore"/"related_topic": generate a fresh recommendation set (related_topic adds
+        anchor_context so an ambiguous follow-up like "colleges for same" stays grounded in
+        what was actually being discussed) -> path plan -> response text.
+      - "roadmap": skip recommendation generation entirely - reuse last turn's offered
+        items verbatim (nothing about them was wrong; only a plan was asked for) -> path
+        plan anchored to the resolved item -> a short roadmap-only response text.
+      - "general_chat": skip recommendation/path-plan generation entirely - a direct
+        conversational answer to a question outside the recommendation flow.
+    Guardrail and RASCEF evaluation always run, regardless of mode - safety/quality
+    scoring is never skipped, only the generation work differs. Used for both the initial
+    attempt and the single critic/revision retry, so both attempts go through identical
+    logic; both record into the same `usage` tracker, so a retry's tokens are counted too.
     """
-    recommendations = _recommendation.generate_recommendations(
-        user_message=user_message,
-        profile=current_profile,
-        retrieved_context=retrieval,
-        usage=usage,
-    )
+    if mode == "general_chat":
+        response_text = _generate_general_chat_response(
+            user_message, current_profile, recent_messages or [], retrieval, usage=usage,
+        )
+        recommendations = {"recommendations": [], "summary": "", "follow_up_question": ""}
+        path_plan = {}
+    elif mode == "roadmap":
+        recommendations = {
+            "recommendations": reused_recommendation_items or [],
+            "summary": "",
+            "follow_up_question": "",
+        }
+        path_plan = _path_planning.generate_path_plan(
+            profile=current_profile,
+            recommendations=recommendations,
+            selected_override=selected_override,
+            usage=usage,
+        )
+        anchor_title = (selected_override or {}).get("title", "this path")
+        response_text = _format_roadmap_only_response_text(student_name, anchor_title)
+    else:  # "explore" or "related_topic"
+        recommendations = _recommendation.generate_recommendations(
+            user_message=user_message,
+            profile=current_profile,
+            retrieved_context=retrieval,
+            anchor_context=anchor_context,
+            usage=usage,
+        )
+        path_plan = _path_planning.generate_path_plan(
+            profile=current_profile,
+            recommendations=recommendations,
+            selected_override=selected_override,
+            usage=usage,
+        )
+        response_text = _format_response_text(student_name, recommendations)
 
-    path_plan = _path_planning.generate_path_plan(
-        profile=current_profile,
-        recommendations=recommendations,
-        selected_override=selected_override,
-        usage=usage,
-    )
-
-    response_text = _format_response_text(student_name, recommendations)
     response_payload = {
         "response": response_text,
         "recommendations": recommendations,
@@ -256,6 +325,7 @@ def _generate_and_score(
         guardrail_result=guardrail,
         input_guardrail_flags=input_guardrail_flags,
         revision_attempted=revision_attempted,
+        is_general_chat=(mode == "general_chat"),
         usage=usage,
     )
 
@@ -321,6 +391,8 @@ def _blocked_turn_result(
     return {
         "student_name": student_name,
         "response": response_text,
+        "intent": "blocked",
+        "intent_anchor_title": None,
         "quality_badge": "blocked",
         "guardrail_flags": [],
         "guardrail_risk_level": "high",
@@ -390,14 +462,17 @@ def run_turn(student_name: str, user_message: str) -> dict:
 
     Agent sequence:
       input guardrail → memory.load → (block here if prompt injection detected) →
-      [discovery ‖ retrieval] → merge profile → match previous choice → recommendation →
-      path_planning → guardrail → evaluation → (critic/revision retry, max 1) →
-      remember recommendations → observability → memory.save
+      [discovery ‖ intent_router] → merge profile → resolve anchor → retrieval (skipped for
+      "roadmap") → recommendation/roadmap/general-chat (branches on intent) → guardrail →
+      evaluation → (critic/revision retry, max 1) → remember recommendations →
+      observability → memory.save
 
-    Discovery and Retrieval run concurrently on worker threads: Discovery only needs the
-    pre-turn profile from memory.load, and Retrieval only needs the raw user_message (its
-    `profile` argument is accepted but unused - see RetrievalAgent) - neither depends on the
-    other's output, so there is no behavior change from running them in parallel.
+    Discovery and Intent Router run concurrently on worker threads: Discovery needs the
+    pre-turn profile from memory.load to extract updates, and Intent Router needs that same
+    pre-turn profile's last_recommendations plus recent conversation history to classify
+    the turn (decision D034) - neither depends on the other's output, so there is no
+    behavior change from running them in parallel. Retrieval runs afterward, since whether
+    it runs at all - and what grounding it gets - depends on the resolved intent.
     """
     start_time = time.perf_counter()
     usage = UsageTracker()
@@ -421,11 +496,10 @@ def run_turn(student_name: str, user_message: str) -> dict:
             student_name, user_message, student_id, memory, input_guardrail_flags, start_time, usage,
         )
 
-    # 3 & 4. Discovery (needs memory's pre-turn profile) and Retrieval (needs only the
-    # message) are independent of each other, so they run concurrently. Both are I/O-bound
-    # network calls (OpenAI / Pinecone), so this overlaps wait time rather than parallelizing
-    # CPU work - expected to shave roughly the smaller of the two calls' latency off the turn
-    # (typically ~1-2s) compared to running them back to back.
+    # 3 & 4. Discovery (needs memory's pre-turn profile) and Intent Router (needs that same
+    # pre-turn profile's last_recommendations, plus recent conversation history) are
+    # independent of each other, so they run concurrently. Both are I/O-bound network calls
+    # (OpenAI), so this overlaps wait time rather than parallelizing CPU work.
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         discovery_future = pool.submit(
             _discovery.extract_profile_updates,
@@ -434,15 +508,15 @@ def run_turn(student_name: str, user_message: str) -> dict:
             existing_profile=memory["profile"],
             usage=usage,
         )
-        retrieval_future = pool.submit(
-            _retrieval.retrieve_relevant_context,
+        intent_future = pool.submit(
+            _intent_router.classify_intent,
             user_message=user_message,
-            profile=memory["profile"],
-            top_k=5,
+            recent_messages=memory["recent_messages"],
+            last_recommendations=memory["profile"].get("last_recommendations", []),
             usage=usage,
         )
         discovery = discovery_future.result()
-        retrieval = retrieval_future.result()
+        intent_result = intent_future.result()
 
     # 4b. Merge and persist the updated profile - depends on Discovery's output, so this
     # happens only after both parallel branches have finished.
@@ -451,17 +525,53 @@ def run_turn(student_name: str, user_message: str) -> dict:
         profile_updates=discovery["student_profile_updates"],
     )
 
-    # 4c. Check whether this message names one of last turn's offered recommendations
-    # (e.g. answering "Which of these resonates most with you?") - if so, the path plan
-    # is anchored to that explicit choice instead of the career > major > college_pathway
-    # priority guess.
-    selected_override = _match_previous_choice(user_message, current_profile.get("last_recommendations", []))
+    # 4c. Resolve the intent router's decision (decision D034) against the merged profile's
+    # last_recommendations. Replaces the old literal-title-only _match_previous_choice():
+    # the router can resolve implicit references ("same", "that one") using actual
+    # conversation history, which the old mechanism never had access to. If the resolved
+    # anchor_title somehow isn't in the list (shouldn't normally happen - IntentRouterAgent
+    # already validated it against the pre-turn list), fall back to "explore" rather than
+    # act on a broken anchor.
+    intent = intent_result.get("intent", "explore")
+    anchor_title = intent_result.get("anchor_title")
+    last_recommendations = current_profile.get("last_recommendations", [])
+    anchor_item = next(
+        (item for item in last_recommendations if isinstance(item, dict) and item.get("title") == anchor_title),
+        None,
+    ) if anchor_title else None
+    if intent in ("roadmap", "related_topic") and anchor_item is None:
+        intent = "explore"
 
-    # 5-9. Generate recommendations, path plan, response, guardrails, and evaluation
+    anchor_context = ""
+    if intent == "related_topic" and anchor_item:
+        item_type = anchor_item.get("type", "")
+        anchor_context = f"{anchor_item.get('title', '')} ({item_type})" if item_type else anchor_item.get("title", "")
+
+    selected_override = anchor_item if intent == "roadmap" else None
+
+    # 5. Retrieval - skipped entirely for "roadmap" (the recommendations are reused
+    # verbatim, so there's nothing new to ground). "related_topic" passes the resolved
+    # anchor as extra grounding context so an ambiguous follow-up like "colleges for same"
+    # stays on-topic instead of the model guessing blind (decision D034).
+    if intent == "roadmap":
+        retrieval = {"query": user_message, "retrieved_documents": [], "retrieval_confidence": 0.0}
+    else:
+        retrieval = _retrieval.retrieve_relevant_context(
+            user_message=user_message,
+            profile=current_profile,
+            top_k=5,
+            anchor_context=anchor_context,
+            usage=usage,
+        )
+
+    # 6-9. Generate (recommendations, a reused-verbatim roadmap, or a general-chat answer,
+    # depending on intent), then guardrails and evaluation - always run, regardless of intent.
     recommendations, path_plan, response_text, response_payload, guardrail, evaluation = _generate_and_score(
         student_name, user_message, current_profile, retrieval,
         input_guardrail_flags=input_guardrail_flags, revision_attempted=False,
-        selected_override=selected_override, usage=usage,
+        mode=intent, selected_override=selected_override,
+        reused_recommendation_items=last_recommendations if intent == "roadmap" else None,
+        anchor_context=anchor_context, recent_messages=memory["recent_messages"], usage=usage,
     )
 
     # 9b. Critic / revision loop - at most one retry, only when the RASCEF score is low
@@ -471,7 +581,9 @@ def run_turn(student_name: str, user_message: str) -> dict:
         recommendations, path_plan, response_text, response_payload, guardrail, evaluation = _generate_and_score(
             student_name, user_message, current_profile, retrieval,
             input_guardrail_flags=input_guardrail_flags, revision_attempted=True,
-            selected_override=selected_override, usage=usage,
+            mode=intent, selected_override=selected_override,
+            reused_recommendation_items=last_recommendations if intent == "roadmap" else None,
+            anchor_context=anchor_context, recent_messages=memory["recent_messages"], usage=usage,
         )
 
     # 9c. Append a note if the (possibly revised) response still needs more information
@@ -479,9 +591,13 @@ def run_turn(student_name: str, user_message: str) -> dict:
         response_text = f"{response_text}\n\n_{_REVISION_NEEDED_NOTE}_"
         response_payload["response"] = response_text
 
-    # 9d. Remember this turn's offered recommendations so the next turn can recognize
-    # the student's reply naming one of them (see 4c above).
-    _memory.remember_last_recommendations(student_id, recommendations.get("recommendations", []))
+    # 9d. Remember this turn's offered recommendations so a later turn can recognize the
+    # student's reply naming one of them. Skipped for "general_chat" - there are no new
+    # recommendations this turn, and overwriting with an empty list would erase a still-
+    # relevant earlier anchor (e.g. a side question mid-conversation about Mental Health
+    # Counselor shouldn't wipe out the ability to later ask for "a roadmap for that").
+    if intent != "general_chat":
+        _memory.remember_last_recommendations(student_id, recommendations.get("recommendations", []))
 
     # 9e. Display-only enrichment (fun facts, future outlook) - runs after guardrails and
     # evaluation have already scored the response, so it never affects RASCEF or guardrails.
@@ -533,6 +649,8 @@ def run_turn(student_name: str, user_message: str) -> dict:
     return {
         "student_name": student_name,
         "response": response_text,
+        "intent": intent,
+        "intent_anchor_title": anchor_title if intent in ("roadmap", "related_topic") else None,
         "quality_badge": evaluation.get("quality_badge", "not_evaluated"),
         "guardrail_flags": guardrail.get("flags", []),
         "guardrail_risk_level": guardrail.get("risk_level", "low"),
