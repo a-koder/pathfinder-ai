@@ -291,14 +291,14 @@ Transition (after demo): "Let's close with where this stands and what's next."
 
 - Verified with **13 scripted end-to-end/integration tests** across every agent
 - RASCEF pass threshold: **24/30** — auto-retry below that, always logged either way
-- **29 documented architecture decisions** (`D001`–`D029`), each with alternatives considered
+- **33 documented architecture decisions** (`D001`–`D033`), each with alternatives considered
 - Known gap, stated plainly: no automated `pytest` suite yet — verification is manual-script-based
 
 <!--
 Speaker notes (30-40s):
 A few honest numbers instead of a vibe: 13 scripted tests cover the full workflow, the
 revision loop, human feedback, prompt versioning, and observability, run against live
-APIs rather than mocks. Every architecture and product decision — 29 of them — is logged
+APIs rather than mocks. Every architecture and product decision — 33 of them — is logged
 with what alternative was considered and why it lost, which is what makes this auditable
 rather than "trust me." And I'll say the quiet part out loud: there's no automated pytest
 suite yet, verification today is manual-script-based. That's a real gap, not glossed over.
