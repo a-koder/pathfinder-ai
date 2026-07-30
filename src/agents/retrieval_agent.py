@@ -1,4 +1,5 @@
 from services.retrieval_service import RetrievalService
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 
@@ -29,11 +30,12 @@ class RetrievalAgent:
     Retrieves the top-k most relevant career, major, and college documents
     from Pinecone for the student's current message and profile.
 
-    Service dependencies: RetrievalService
+    Service dependencies: RetrievalService, TracingService (optional)
     """
 
-    def __init__(self, retrieval_service: RetrievalService):
+    def __init__(self, retrieval_service: RetrievalService, tracing_service: TracingService | None = None):
         self._retrieval_service = retrieval_service
+        self._tracing = tracing_service or TracingService()
 
     def retrieve_relevant_context(
         self,
@@ -49,8 +51,18 @@ class RetrievalAgent:
         scores = [d["score"] for d in retrieved_documents]
         retrieval_confidence = sum(scores) / len(scores) if scores else 0.0
 
-        return {
+        result = {
             "query": user_message,
             "retrieved_documents": retrieved_documents,
             "retrieval_confidence": retrieval_confidence,
         }
+        self._tracing.trace_event(
+            name="retrieval",
+            inputs={"user_message": user_message, "top_k": top_k},
+            outputs={
+                "retrieved_titles": [d["title"] for d in retrieved_documents],
+                "retrieval_confidence": retrieval_confidence,
+            },
+            metadata={"retrieved_document_count": len(retrieved_documents)},
+        )
+        return result

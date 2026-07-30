@@ -170,7 +170,7 @@ Every turn writes one row to the local `observability_logs` SQLite table: timest
 
 ## LangSmith
 
-Optional. Set these in `.env` to enable tracing of every evaluation call:
+Optional. Set these in `.env` to enable tracing of every reasoning stage in a turn:
 
 ```
 LANGSMITH_API_KEY=your-langsmith-key-here
@@ -180,7 +180,7 @@ LANGSMITH_TRACING=true
 
 Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. `TracingService` (`src/services/tracing_service.py`) owns that safety wrapper, governance-metadata enrichment, and the lazy singleton client; it delegates the actual SDK call to `LangSmithClient` (`src/infrastructure/langsmith_client.py`), the same pattern every other external dependency (OpenAI, Pinecone, SQLite) follows. When enabled, every trace is auto-enriched with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
 
-**Scope today:** only `EvaluationAgent` calls `trace_event()` — Discovery, Retrieval, Recommendation, Path Planning, and the guardrail checks aren't traced. This was scoped that way from the start (decisions D016/D022 introduced LangSmith specifically for evaluation/prompt-governance auditing) and never expanded to cover the rest of the turn — a real gap, not a technical limitation.
+**Scope:** every agent in the "one turn, in order" sequence traces itself — Input Guardrail, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation — each receiving the same shared `TracingService` instance via constructor injection, exactly like `LLMService` or `RetrievalService` are injected elsewhere. Memory Agent and Observability Agent are deliberately excluded: they're bookkeeping steps already logged to SQLite, not AI decision points LangSmith is meant to explain. Because tracing is a constructor dependency rather than a bare module import, adding it to a new stage later means passing `tracing_service=_tracing_service` at the wiring site in `orchestrator.py`, not editing `tracing_service.py` itself.
 
 ---
 

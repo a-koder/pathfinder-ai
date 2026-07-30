@@ -18,6 +18,7 @@ from services.retrieval_service import RetrievalService
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 from services.evaluation_service import EvaluationService
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 from agents.memory_agent import MemoryAgent
@@ -50,16 +51,21 @@ _retrieval_service = RetrievalService(_embedding_service, _pinecone_client, _kno
 _llm_service = LLMService(_openai_client)
 _prompt_service = PromptService()
 _evaluation_service = EvaluationService(_llm_service)
+_tracing_service = TracingService()
 
 # ── Agent wiring ──────────────────────────────────────────────────────────────
+# One shared TracingService instance goes into every agent whose stage is worth tracing
+# (the reasoning/decision steps in the "At a Glance" diagram) - Memory Agent and
+# Observability Agent are deliberately excluded, since they're bookkeeping steps already
+# logged to SQLite, not AI decision points LangSmith is meant to explain.
 _memory = MemoryAgent(_student_repo, _profile_repo, _message_repo, _summary_repo)
-_input_guardrail = InputGuardrailAgent()
-_discovery = DiscoveryAgent(_llm_service)
-_retrieval = RetrievalAgent(_retrieval_service)
-_recommendation = RecommendationAgent(_llm_service, _prompt_service)
-_path_planning = PathPlanningAgent(_llm_service)
-_guardrail = GuardrailAgent()
-_evaluation = EvaluationAgent(_evaluation_service)
+_input_guardrail = InputGuardrailAgent(tracing_service=_tracing_service)
+_discovery = DiscoveryAgent(_llm_service, tracing_service=_tracing_service)
+_retrieval = RetrievalAgent(_retrieval_service, tracing_service=_tracing_service)
+_recommendation = RecommendationAgent(_llm_service, _prompt_service, tracing_service=_tracing_service)
+_path_planning = PathPlanningAgent(_llm_service, tracing_service=_tracing_service)
+_guardrail = GuardrailAgent(tracing_service=_tracing_service)
+_evaluation = EvaluationAgent(_evaluation_service, tracing_service=_tracing_service)
 _observability = ObservabilityAgent(_observability_repo)
 
 

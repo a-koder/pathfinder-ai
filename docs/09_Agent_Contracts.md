@@ -46,15 +46,17 @@ Every agent constructor accepts an optional `prompt_version` (or `ruleset_versio
 | Agent | File | Key Method | When Called | Service Dependencies |
 |---|---|---|---|---|
 | Orchestrator | `src/agents/orchestrator.py` | `run_turn(student_name, user_message)` | Every conversation turn | All agents + services (injected) |
-| Input Guardrail Agent | `src/agents/input_guardrail_agent.py` | `check_input(user_message)` | First step in the turn, before memory load | None (rule-based only) |
+| Input Guardrail Agent | `src/agents/input_guardrail_agent.py` | `check_input(user_message)` | First step in the turn, before memory load | `TracingService` (optional) |
 | Memory Agent | `src/agents/memory_agent.py` | `load_memory()`, `update_profile()`, `save_turn()` | Load right after the input guardrail; merge after Discovery; save at turn end | `StudentRepository`, `ProfileRepository`, `MessageRepository`, `ConversationSummaryRepository` |
-| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Retrieval, after memory load | `LLMService` |
-| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | Concurrently with Discovery, after memory load | `RetrievalService` |
-| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Discovery and Retrieval both complete and the profile is merged | `LLMService`, `PromptService` |
-| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation | `LLMService` |
-| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning, before Evaluation | None (rule-based only) |
-| Evaluation Agent | `src/agents/evaluation_agent.py` | `evaluate()` | After Guardrail | `EvaluationService` |
+| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Retrieval, after memory load | `LLMService`, `TracingService` (optional) |
+| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | Concurrently with Discovery, after memory load | `RetrievalService`, `TracingService` (optional) |
+| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Discovery and Retrieval both complete and the profile is merged | `LLMService`, `PromptService`, `TracingService` (optional) |
+| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation | `LLMService`, `TracingService` (optional) |
+| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning, before Evaluation | `TracingService` (optional) |
+| Evaluation Agent | `src/agents/evaluation_agent.py` | `evaluate()` | After Guardrail | `EvaluationService`, `TracingService` (optional) |
 | Observability Agent | `src/agents/observability_agent.py` | `log_turn()` | End of every turn | `ObservabilityRepository` |
+
+**"Optional" above means the constructor accepts `tracing_service: TracingService | None = None` and falls back to constructing its own (safe, no-op-when-unconfigured) instance if none is given — so every existing call site that constructs an agent directly, including the test scripts, keeps working unchanged. In the running app, `orchestrator.py` injects one shared `TracingService` instance into all seven, so a single client connection (when tracing is actually enabled) serves the whole turn.**
 
 ## Dependency Injection Pattern
 
@@ -82,18 +84,21 @@ retrieval_service = RetrievalService(embedding_service, pinecone_client, knowled
 llm_service = LLMService(openai_client)
 prompt_service = PromptService()
 evaluation_service = EvaluationService(llm_service)
+tracing_service = TracingService()
 
 # Agents — receive only what they need
 memory = MemoryAgent(student_repo, profile_repo, message_repo, summary_repo)
-input_guardrail = InputGuardrailAgent()
-discovery = DiscoveryAgent(llm_service)
-retrieval = RetrievalAgent(retrieval_service)
-recommendation = RecommendationAgent(llm_service, prompt_service)
-path_planning = PathPlanningAgent(llm_service)
-guardrail = GuardrailAgent()
-evaluation = EvaluationAgent(evaluation_service)
+input_guardrail = InputGuardrailAgent(tracing_service=tracing_service)
+discovery = DiscoveryAgent(llm_service, tracing_service=tracing_service)
+retrieval = RetrievalAgent(retrieval_service, tracing_service=tracing_service)
+recommendation = RecommendationAgent(llm_service, prompt_service, tracing_service=tracing_service)
+path_planning = PathPlanningAgent(llm_service, tracing_service=tracing_service)
+guardrail = GuardrailAgent(tracing_service=tracing_service)
+evaluation = EvaluationAgent(evaluation_service, tracing_service=tracing_service)
 observability = ObservabilityAgent(observability_repo)
 ```
+
+The same `tracing_service` instance is passed to all seven — one shared client connection, not one per agent. This is the same dependency-injection style every other cross-cutting service already follows (`llm_service` reused across four agents above); tracing was the one exception before this pass, importing `langsmith` as a bare module call from inside `EvaluationAgent` instead of receiving it as a constructor argument.
 
 **What this enables:**
 - In tests, pass a fake `LLMService` to any agent — no real API key needed (see `src/scripts/test_*.py`, which mostly use the real services against live APIs, but the agents themselves don't care)
@@ -239,6 +244,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Ruleset:** `src/prompts/input_guardrail/v1.yaml`, loaded via `PromptLoader.load_ruleset()` (see Prompt Governance above). All 3 flags' phrases live in this file — `input_guardrail_agent.py` contains only the matching logic, no hardcoded phrase lists.
 
+**Optional tracing:** if a `TracingService` is injected and LangSmith is configured, every call emits an `input_guardrail` trace (message, flags, pass/fail) via the same shared instance every other traced agent receives.
+
 ---
 
 ## 4. Discovery Agent
@@ -276,6 +283,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Prompt:** `src/prompts/discovery/v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
 
+**Optional tracing:** emits a `discovery` trace (student name, message, confidence) via the injected `TracingService`, when configured.
+
 ---
 
 ## 5. Retrieval Agent
@@ -309,6 +318,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 - `retrieval_confidence` is the average score across the returned documents
 
 **Failure behavior:** If Pinecone is unavailable, `RetrievalService` falls back to `KnowledgeLoader.search_by_tags()` (local tag-intersection search) transparently — the agent normalizes either result shape into the contract above without the caller needing to know which path was used.
+
+**Optional tracing:** emits a `retrieval` trace (query, retrieved document titles, retrieval confidence) via the injected `TracingService`, when configured.
 
 ---
 
@@ -357,6 +368,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Not part of this agent's contract:** `fun_facts` and `future_outlook`, which appear on recommendation items in the final orchestrator result, are *not* generated here — they are added afterward by `orchestrator._enrich_recommendations()` (decision D026, see Orchestrator section above) via a separate, unversioned, display-only LLM call that runs after evaluation. `RecommendationAgent.generate_recommendations()` itself never returns those two fields.
 
+**Optional tracing:** emits a `recommendation` trace (message, retrieved document count, recommendation titles, whether the fallback was used) via the injected `TracingService`, when configured.
+
 ---
 
 ## 7. Path Planning Agent
@@ -394,6 +407,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 **Failure behavior:** If the model output is unusable or no recommendation exists to plan around, returns a generic 3-step fallback roadmap ("talk to a counselor" / "explore related clubs" / "research colleges as application season approaches") instead of crashing.
 
 **Prompt:** `src/prompts/path_planning/v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
+
+**Optional tracing:** emits a `path_planning` trace (selected title, choice source, resulting path) via the injected `TracingService`, when configured.
 
 ---
 
@@ -437,6 +452,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 **Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail.
 
 **Ruleset:** `src/prompts/guardrail/v1.yaml`, loaded via `PromptLoader.load_ruleset()` (see Prompt Governance above). All 10 flags' phrases, keywords, connectors/traits, risk levels, and revision text live in this file — `guardrail_agent.py` contains only the matching logic, no hardcoded phrase lists.
+
+**Optional tracing:** emits a `guardrail` trace (message, flags, risk level) via the injected `TracingService`, when configured.
 
 ---
 
@@ -483,7 +500,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** If both the LLM judge and the rule-based fallback fail (should not happen in practice — the fallback has no external dependencies), returns a `quality_badge: "not_evaluated"` result with zeroed scores rather than crashing the turn.
 
-**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via `src/services/tracing_service.py`. The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 6 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
+**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via the injected `TracingService` (same instance every other traced agent receives — see Dependency Injection Pattern above). The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 6 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
 
 **Prompt:** `src/prompts/evaluation/rascef_v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
 

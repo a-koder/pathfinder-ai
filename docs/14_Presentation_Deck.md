@@ -193,7 +193,7 @@ observability come in."
 
 - Every prompt is a **versioned file**, never hardcoded — swap via one env var, instant rollback
 - Every turn logs latency, flags, score, and **real per-model cost**
-- **LangSmith tracing** (optional): auto-tags every evaluation trace with prompt versions, guardrail flags, and retry status — no per-call boilerplate
+- **LangSmith tracing** (optional): every reasoning stage traces itself via one shared, constructor-injected `TracingService` — auto-tagged with prompt versions and retry status, no per-call boilerplate
 - **Golden evaluation dataset**: 10 mock student profiles, 9 scripted scenarios (`docs/11`) — supports manual prompt tuning today, dataset-based automated eval is next
 - Versioned prompts + logged decisions + 👍/👎 feedback are the substrate the improvement loop runs on
 
@@ -204,9 +204,10 @@ does this actually cost? Every prompt — discovery, recommendation, path planni
 RASCEF judge — lives in a versioned file, so a prompt edit is a new file, not an
 overwritten one, and it's fully rollback-able. On the right, that's a real per-turn cost
 breakdown, not a placeholder — it sums actual token usage across every model called that
-turn, including a retry, broken down per model. When LangSmith is enabled, every evaluation
-trace is auto-tagged with the exact prompt versions, guardrail flags, and retry status, with
-no extra code at each call site. There's also a 10-profile, 9-scenario golden evaluation
+turn, including a retry, broken down per model. When LangSmith is enabled, every stage in
+the turn traces itself through the same injected TracingService, auto-tagged with the exact
+prompt versions and retry status, with no extra code at each call site. There's also a
+10-profile, 9-scenario golden evaluation
 dataset used for manual prompt tuning today — LangSmith dataset-based evaluation against
 those same scenarios is the natural next step, covered later in What's Next.
 Transition: "So what does that actually feel like for a student?"

@@ -2,6 +2,7 @@ import re
 
 import config
 from services.prompt_loader import load_ruleset
+from services.tracing_service import TracingService
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 
@@ -105,16 +106,17 @@ class GuardrailAgent:
     Rules (phrases, keywords, risk levels, revision text) are loaded from
     src/prompts/guardrail/<version>.yaml rather than hardcoded, via PromptLoader.
 
-    Service dependencies: none
+    Service dependencies: TracingService (optional)
     """
 
-    def __init__(self, ruleset_version: str | None = None):
+    def __init__(self, ruleset_version: str | None = None, tracing_service: TracingService | None = None):
         self._ruleset_version = ruleset_version or config.GUARDRAIL_RULESET_VERSION
         ruleset = load_ruleset("guardrail", self._ruleset_version)
         self._flags = ruleset.get("flags", {})
         settings = ruleset.get("settings", {})
         self._vague_message_max_words = settings.get("vague_message_max_words", 3)
         self._sparse_profile_fields = settings.get("sparse_profile_fields", [])
+        self._tracing = tracing_service or TracingService()
 
     def check_guardrails(self, response_payload: dict, profile: dict, user_message: str) -> dict:
         """Runs every rule-based check and returns a GuardrailResult-shaped dict."""
@@ -187,12 +189,19 @@ class GuardrailAgent:
             flag("insufficient_profile")
 
         risk_level = _combine_risk(risk_levels)
-        return {
+        result = {
             "passed": risk_level != "high",
             "flags": flags,
             "risk_level": risk_level,
             "required_revisions": required_revisions,
         }
+        self._tracing.trace_event(
+            name="guardrail",
+            inputs={"user_message": user_message},
+            outputs=result,
+            metadata={"flags": flags, "risk_level": risk_level},
+        )
+        return result
 
     def _is_vague_message(self, user_message: str) -> bool:
         return len((user_message or "").split()) < self._vague_message_max_words
