@@ -1,6 +1,7 @@
 import config
 from services.llm_service import LLMService
 from services.prompt_loader import load_prompt
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 _PROFILE_FIELDS = [
@@ -34,13 +35,19 @@ class DiscoveryAgent:
     from the latest message. Asks one clarifying question at a time. Never
     invents a grade level or GPA the student did not state.
 
-    Service dependencies: LLMService
+    Service dependencies: LLMService, TracingService (optional)
     """
 
-    def __init__(self, llm_service: LLMService, prompt_version: str | None = None):
+    def __init__(
+        self,
+        llm_service: LLMService,
+        prompt_version: str | None = None,
+        tracing_service: TracingService | None = None,
+    ):
         self._llm = llm_service
         self._prompt_version = prompt_version or config.DISCOVERY_PROMPT_VERSION
         self._system_prompt = load_prompt("discovery", self._prompt_version)
+        self._tracing = tracing_service or TracingService()
 
     def extract_profile_updates(
         self,
@@ -57,7 +64,14 @@ class DiscoveryAgent:
         )
 
         raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
-        return self._validate(raw, existing_profile)
+        result = self._validate(raw, existing_profile)
+        self._tracing.trace_event(
+            name="discovery",
+            inputs={"student_name": student_name, "user_message": user_message},
+            outputs=result,
+            metadata={"confidence": result.get("confidence", 0.0)},
+        )
+        return result
 
     def _validate(self, raw: dict, existing_profile: dict) -> dict:
         if not isinstance(raw, dict):

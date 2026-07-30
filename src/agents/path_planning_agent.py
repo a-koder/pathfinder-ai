@@ -1,6 +1,7 @@
 import config
 from services.llm_service import LLMService
 from services.prompt_loader import load_prompt
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 _LIST_FIELDS = [
@@ -46,13 +47,19 @@ class PathPlanningAgent:
     back to the highest-ranked career (or major, or college_pathway, in that priority
     order) among their recommendations.
 
-    Service dependencies: LLMService
+    Service dependencies: LLMService, TracingService (optional)
     """
 
-    def __init__(self, llm_service: LLMService, prompt_version: str | None = None):
+    def __init__(
+        self,
+        llm_service: LLMService,
+        prompt_version: str | None = None,
+        tracing_service: TracingService | None = None,
+    ):
         self._llm = llm_service
         self._prompt_version = prompt_version or config.PATH_PLANNING_PROMPT_VERSION
         self._system_prompt = load_prompt("path_planning", self._prompt_version)
+        self._tracing = tracing_service or TracingService()
 
     def generate_path_plan(
         self,
@@ -75,15 +82,20 @@ class PathPlanningAgent:
         source = "student_choice" if selected_override else "auto_priority"
 
         if not selected:
-            return self._fallback(selected_title, source)
+            result = self._fallback(selected_title, source)
+        else:
+            user_prompt = self._build_user_prompt(profile, selected)
+            raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
+            parsed = self._validate(raw, selected_title, source)
+            result = parsed if parsed is not None else self._fallback(selected_title, source)
 
-        user_prompt = self._build_user_prompt(profile, selected)
-        raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
-        parsed = self._validate(raw, selected_title, source)
-        if parsed is not None:
-            return parsed
-
-        return self._fallback(selected_title, source)
+        self._tracing.trace_event(
+            name="path_planning",
+            inputs={"selected_title": selected_title, "source": source},
+            outputs={"selected_path": result.get("selected_path", "")},
+            metadata={"source": source},
+        )
+        return result
 
     def _build_user_prompt(self, profile: dict, selected: dict) -> str:
         lines = [f"Selected path: {selected.get('title', '')} ({selected.get('type', 'career')})"]

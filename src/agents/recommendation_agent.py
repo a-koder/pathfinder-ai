@@ -2,6 +2,7 @@ import config
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 from services.prompt_loader import load_prompt
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 _RECOMMENDATION_FIELDS = [
@@ -34,14 +35,21 @@ class RecommendationAgent:
     Generates a structured, grounded recommendation response using the student
     profile, retrieved career / major / college context, and conversation history.
 
-    Service dependencies: LLMService, PromptService
+    Service dependencies: LLMService, PromptService, TracingService (optional)
     """
 
-    def __init__(self, llm_service: LLMService, prompt_service: PromptService, prompt_version: str | None = None):
+    def __init__(
+        self,
+        llm_service: LLMService,
+        prompt_service: PromptService,
+        prompt_version: str | None = None,
+        tracing_service: TracingService | None = None,
+    ):
         self._llm = llm_service
         self._prompts = prompt_service
         self._prompt_version = prompt_version or config.RECOMMENDATION_PROMPT_VERSION
         self._system_prompt = load_prompt("recommendation", self._prompt_version)
+        self._tracing = tracing_service or TracingService()
 
     def generate_recommendations(
         self,
@@ -62,10 +70,18 @@ class RecommendationAgent:
 
         raw = self._llm.generate_json(system_prompt=self._system_prompt, user_prompt=user_prompt, usage=usage)
         parsed = self._validate(raw)
-        if parsed is not None:
-            return parsed
+        result = parsed if parsed is not None else self._fallback(profile, retrieved_documents)
 
-        return self._fallback(profile, retrieved_documents)
+        self._tracing.trace_event(
+            name="recommendation",
+            inputs={"user_message": user_message, "retrieved_document_count": len(retrieved_documents)},
+            outputs={
+                "recommendation_titles": [item.get("title", "") for item in result.get("recommendations", [])],
+                "summary": result.get("summary", ""),
+            },
+            metadata={"used_fallback": parsed is None},
+        )
+        return result
 
     def _validate(self, raw: dict) -> dict | None:
         if not isinstance(raw, dict):

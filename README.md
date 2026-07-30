@@ -25,7 +25,7 @@ Presentation   src/app.py                Streamlit UI — no business logic
 Application    src/agents/                10 agents + orchestrator
 Service        src/services/              LLM, embeddings, retrieval, prompts, evaluation, tracing
 Repository     src/repositories/          All SQL lives here
-Infrastructure src/infrastructure/        Only layer that imports openai / pinecone / sqlite3
+Infrastructure src/infrastructure/        Only layer that imports openai / pinecone / sqlite3 / langsmith
 Domain         src/schemas/models.py      Reference Pydantic models
 ```
 
@@ -73,7 +73,7 @@ Full contracts for every agent: `docs/09_Agent_Contracts.md`. Full architecture 
 | Agent | Responsibility |
 |---|---|
 | Orchestrator | Runs the fixed pipeline above; assembles the final response and trace; runs the critic/revision retry |
-| Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags; detection only); runs first, before memory load |
+| Input Guardrail Agent | Rule-based pre-generation check on the raw message (profanity/frustration/prompt-injection flags); runs first, before memory load; blocks the turn only on `prompt_injection_detected`, profanity/frustration remain detection-only |
 | Memory Agent | Loads/merges/persists the student profile and message history |
 | Discovery Agent | Extracts profile fields from the latest message only; never invents GPA or grade level; runs concurrently with Retrieval |
 | Retrieval Agent | Semantic search over the knowledge base via Pinecone; runs concurrently with Discovery |
@@ -119,7 +119,7 @@ Full design rationale (why one namespace, why metadata filtering over multiple i
 
 ## Input + Output Guardrails
 
-**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). It's detection-only — flags are recorded on the turn and shown in the trace, but the conversation is never blocked or altered based on them. It runs before memory load, since it's a pure function of the raw message with no dependency on stored state.
+**Input Guardrails:** before any other agent sees the student's message, the Input Guardrail Agent runs a rule-based check for `profanity_detected`, `frustration_detected`, and `prompt_injection_detected` (`src/prompts/input_guardrail/v1.yaml`). `profanity_detected` and `frustration_detected` remain detection-only — flags are recorded on the turn and shown in the trace, but the conversation proceeds unchanged. `prompt_injection_detected` is the exception: the turn short-circuits immediately after memory load, before Discovery/Retrieval/Recommendation ever run, and returns a fixed safe response instead — no LLM call is made, so a blocked turn costs $0.00. The check itself still runs before memory load, since it's a pure function of the raw message with no dependency on stored state; the block is applied right after memory load (see `docs/09_Agent_Contracts.md` for the exact sequencing).
 
 **Output Guardrails:** rule-based, no LLM call. Scans the full turn's text for unsafe language and checks the profile for context the response implicitly depends on:
 
@@ -170,7 +170,7 @@ Every turn writes one row to the local `observability_logs` SQLite table: timest
 
 ## LangSmith
 
-Optional. Set these in `.env` to enable tracing of every evaluation call:
+Optional. Set these in `.env` to enable tracing of every reasoning stage in a turn:
 
 ```
 LANGSMITH_API_KEY=your-langsmith-key-here
@@ -178,7 +178,11 @@ LANGSMITH_PROJECT=pathfinder-ai
 LANGSMITH_TRACING=true
 ```
 
-Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. When enabled, every trace is auto-enriched (centrally, in `tracing_service.py`) with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
+Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. `TracingService` (`src/services/tracing_service.py`) owns that safety wrapper, governance-metadata enrichment, and the lazy singleton client; it delegates the actual SDK call to `LangSmithClient` (`src/infrastructure/langsmith_client.py`), the same pattern every other external dependency (OpenAI, Pinecone, SQLite) follows. When enabled, every trace is auto-enriched with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
+
+**Scope:** every agent in the "one turn, in order" sequence traces itself — Input Guardrail, Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation — each receiving the same shared `TracingService` instance via constructor injection, exactly like `LLMService` or `RetrievalService` are injected elsewhere. Memory Agent and Observability Agent are deliberately excluded: they're bookkeeping steps already logged to SQLite, not AI decision points LangSmith is meant to explain. Because tracing is a constructor dependency rather than a bare module import, adding it to a new stage later means passing `tracing_service=_tracing_service` at the wiring site in `orchestrator.py`, not editing `tracing_service.py` itself.
+
+**Every trace fires on a background thread, not inline.** A measured direct call to LangSmith's `create_run()` takes ~80-1000ms; blocking on that seven times per turn would add real, visible latency to every response. `TracingService.trace_event()` builds the trace payload on the caller's thread (cheap, no I/O) and submits the actual network call to a small shared `ThreadPoolExecutor`, returning immediately — measured at ~1-8ms per call after this change, versus ~80-1000ms before. Nothing in the same turn depends on a trace's return value, so there's no correctness cost to not waiting for it; a slow or unreachable LangSmith degrades to "the trace arrives late" instead of "the turn gets slower."
 
 ---
 
@@ -269,7 +273,16 @@ Linux/WSL uses `.venv_linux` the same way; reserved for non-Windows work, not us
 ```powershell
 copy .env.example .env
 ```
-Fill in `OPENAI_API_KEY` and `PINECONE_API_KEY` in `.env`. LangSmith variables are optional (see LangSmith above).
+Then fill in `.env`:
+
+| Variable | Required | Where to get it |
+|---|---|---|
+| `OPENAI_API_KEY` | Yes — used for generation, evaluation, and embeddings | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `PINECONE_API_KEY` | Yes — used for retrieval | [app.pinecone.io](https://app.pinecone.io) (free tier is enough for this project) |
+| `PINECONE_INDEX_NAME` | No — defaults to `pathfinder-ai` | Only change this if you want a different index name |
+| `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` | No — see LangSmith below | [smith.langchain.com](https://smith.langchain.com) |
+
+The app runs fully without LangSmith configured.
 
 **3. Populate Pinecone (first run only, or after editing `data/*.json`):**
 ```powershell
@@ -298,7 +311,7 @@ pathfinder-ai/
 │   ├── agents/                   # 10 agents + orchestrator
 │   ├── services/                 # LLM, embeddings, retrieval, prompts, evaluation, tracing
 │   ├── repositories/              # All SQL
-│   ├── infrastructure/           # OpenAI, Pinecone, SQLite, KnowledgeLoader adapters
+│   ├── infrastructure/           # OpenAI, Pinecone, SQLite, KnowledgeLoader, LangSmith adapters
 │   ├── schemas/models.py         # Reference domain models
 │   ├── prompts/                  # Externalized, versioned prompts (discovery, recommendation,
 │   │                              #   path_planning, evaluation .md; guardrail + input_guardrail .yaml rulesets)
@@ -309,3 +322,15 @@ pathfinder-ai/
 ├── .env.example
 └── README.md
 ```
+
+---
+
+## Documentation
+
+Full documentation index, organized by topic (problem statement, architecture, RAG, guardrails,
+evaluation, observability, roadmap, and more): **[`docs/README.md`](docs/README.md)**.
+
+Highlights: the capstone-to-code mapping and full pattern list live in
+[`docs/07_Capstone_Requirements_Mapping.md`](docs/07_Capstone_Requirements_Mapping.md);
+the presentation deck is [`docs/14_Presentation_Deck.md`](docs/14_Presentation_Deck.md); what's
+next beyond this MVP is [`docs/19_Future_Vision.md`](docs/19_Future_Vision.md).

@@ -1,6 +1,6 @@
 import config
 from services.evaluation_service import EvaluationService
-from services import tracing_service
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 _NOT_EVALUATED_RESULT = {
@@ -27,11 +27,12 @@ class EvaluationAgent:
     24/30. Primary path is GPT-4o as an LLM-as-judge, with a rule-based fallback
     if the judge call fails, so a response is never left unevaluated.
 
-    Service dependencies: EvaluationService
+    Service dependencies: EvaluationService, TracingService (optional)
     """
 
-    def __init__(self, evaluation_service: EvaluationService):
+    def __init__(self, evaluation_service: EvaluationService, tracing_service: TracingService | None = None):
         self._evaluation_service = evaluation_service
+        self._tracing = tracing_service or TracingService()
 
     def evaluate(
         self,
@@ -114,10 +115,10 @@ class EvaluationAgent:
         input_guardrail_flags: list,
         revision_attempted: bool,
     ) -> None:
-        if not tracing_service.is_tracing_enabled():
+        if not self._tracing.is_enabled():
             return
         try:
-            tracing_service.trace_event(
+            self._tracing.trace_event(
                 name="evaluation",
                 inputs={
                     "user_message": user_message,

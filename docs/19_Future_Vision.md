@@ -4,7 +4,7 @@
 
 This document lists realistic next steps beyond the current MVP — extensions of what already exists, not speculative features. Each item below builds on a concrete piece of the current architecture (referenced inline) rather than proposing something disconnected from it. Nothing here is scoped, scheduled, or committed; treat it as a roadmap of *plausible* directions, to be turned into real decisions (and added to `docs/12_DECISION_LOG.md`) if and when they're pursued.
 
-For what's explicitly out of scope for the MVP today, see `docs/01_Vision.md`'s "Out of Scope (MVP)" section — several items below (scholarships, real-time college data) are the natural next step past that boundary.
+For what's explicitly out of scope for the MVP today, see `docs/01_Product_Overview.md`'s customer FAQ — several items below (scholarships, real-time college data) are the natural next step past that boundary.
 
 ---
 
@@ -16,7 +16,7 @@ For what's explicitly out of scope for the MVP today, see `docs/01_Vision.md`'s 
 
 ## Agent-to-Agent (A2A) Interop
 
-**Today:** All 10 agents coordinate exclusively through the central `Orchestrator` (`docs/07_Capstone_Mapping_and_Implementation_Plan.md` §3) — no agent calls another agent directly, and there is no cross-process or cross-organization agent messaging. This is a deliberate hub-and-spoke design, not a gap: it keeps every interaction centrally traceable in `observability_logs`.
+**Today:** All 10 agents coordinate exclusively through the central `Orchestrator` (`docs/09_Agent_Contracts.md` §1) — no agent calls another agent directly, and there is no cross-process or cross-organization agent messaging. This is a deliberate hub-and-spoke design, not a gap: it keeps every interaction centrally traceable in `observability_logs`.
 
 **Next step:** Adopt a real agent-to-agent interop mechanism (e.g. Google's A2A protocol — agent cards, task discovery, JSON-RPC handoffs) only at a genuine cross-system boundary, if one shows up — for example, a school's own counselor-bot handing a student off to PathFinder AI directly, or PathFinder calling an external district system's agent. This is **not** planned as an internal refactor of the existing 10 in-process agents: replacing orchestrator-hub coordination with peer-to-peer messaging inside a single application would reduce traceability for no functional gain. Pursue this only if and when an actual external agent needs to talk to PathFinder AI.
 
@@ -24,11 +24,11 @@ For what's explicitly out of scope for the MVP today, see `docs/01_Vision.md`'s 
 
 **Today:** `LLMService` (`src/services/llm_service.py`) wraps a single `OpenAIClient`; every agent depends on the same injected `LLMService`, and OpenAI is the only supported model provider.
 
-**Next step:** Introduce a provider interface behind `LLMService` (an abstract `generate_text`/`generate_json` contract), with e.g. an `AnthropicClient` alongside `OpenAIClient`, selected by config. Since agents already depend only on the `LLMService` abstraction and never import a specific SDK (`docs/07` Phase 6 design note), this is a service-layer change, not an agent-layer one — and it would enable real cost/quality comparisons per model tier (e.g. a different model for RASCEF evaluation vs. generation) without touching agent code.
+**Next step:** Introduce a provider interface behind `LLMService` (an abstract `generate_text`/`generate_json` contract), with e.g. an `AnthropicClient` alongside `OpenAIClient`, selected by config. Since agents already depend only on the `LLMService` abstraction and never import a specific SDK (`docs/09_Agent_Contracts.md`'s Dependency Injection Pattern section), this is a service-layer change, not an agent-layer one — and it would enable real cost/quality comparisons per model tier (e.g. a different model for RASCEF evaluation vs. generation) without touching agent code.
 
 ## Scholarship APIs
 
-**Today:** Explicitly out of scope for the MVP (`docs/01_Vision.md`) — PathFinder AI has no scholarship data or matching logic at all.
+**Today:** Explicitly out of scope for the MVP (`docs/01_Product_Overview.md`) — PathFinder AI has no scholarship data or matching logic at all.
 
 **Next step:** A scholarship-matching capability, likely as its own MCP-exposed tool or dedicated service, that the Recommendation Agent or Path Planning Agent could query once a student's profile (GPA, interests, budget preference) is established. This is a natural extension of the existing `budget_preference` guardrail check (`missing_budget_for_affordability_guidance`), which today only detects the *absence* of budget context — a scholarship integration would let the system act on it.
 

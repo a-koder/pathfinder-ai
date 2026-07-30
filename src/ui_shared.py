@@ -188,3 +188,17 @@ def render_doc_tabs(sections: list[tuple[str, str]]) -> None:
                     st.markdown(load_doc(filename))
             except FileNotFoundError:
                 st.warning(f"docs/{filename} could not be found.")
+
+
+def render_doc_page(intro: str, sections: list[tuple[str, str]]) -> None:
+    """
+    Generic body for any page whose entire job is displaying real docs/*.md content -
+    header, one intro line, a "rendered directly from docs" caption, then the tabs
+    themselves. Used for Architecture, Technology, and Product Vision; adding another
+    doc-viewer page is a few lines of st.Page(functools.partial(...)) config in app.py,
+    not a new file - this was three near-identical files before.
+    """
+    render_header()
+    st.write(intro)
+    st.caption("Rendered directly from the project's own documentation - nothing duplicated.")
+    render_doc_tabs(sections)

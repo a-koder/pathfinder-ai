@@ -2,6 +2,7 @@ import re
 
 import config
 from services.prompt_loader import load_ruleset
+from services.tracing_service import TracingService
 
 
 def _contains_any_phrase(text: str, phrases: list[str]) -> bool:
@@ -22,13 +23,14 @@ class InputGuardrailAgent:
 
     Rules are loaded from src/prompts/input_guardrail/<version>.yaml via PromptLoader.
 
-    Service dependencies: none
+    Service dependencies: TracingService (optional)
     """
 
-    def __init__(self, ruleset_version: str | None = None):
+    def __init__(self, ruleset_version: str | None = None, tracing_service: TracingService | None = None):
         self._ruleset_version = ruleset_version or config.INPUT_GUARDRAIL_RULESET_VERSION
         ruleset = load_ruleset("input_guardrail", self._ruleset_version)
         self._rules = ruleset.get("rules", {})
+        self._tracing = tracing_service or TracingService()
 
     def check_input(self, user_message: str) -> dict:
         """Runs every input-side rule check and returns {"flags": [...], "passed": bool}."""
@@ -40,4 +42,11 @@ class InputGuardrailAgent:
             if _contains_any_phrase(text, phrases):
                 flags.append(flag_name)
 
-        return {"flags": flags, "passed": len(flags) == 0}
+        result = {"flags": flags, "passed": len(flags) == 0}
+        self._tracing.trace_event(
+            name="input_guardrail",
+            inputs={"user_message": text},
+            outputs=result,
+            metadata={"flags": flags},
+        )
+        return result

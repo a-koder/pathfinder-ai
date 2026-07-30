@@ -18,6 +18,7 @@ from services.retrieval_service import RetrievalService
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 from services.evaluation_service import EvaluationService
+from services.tracing_service import TracingService
 from services.usage_tracker import UsageTracker
 
 from agents.memory_agent import MemoryAgent
@@ -50,16 +51,21 @@ _retrieval_service = RetrievalService(_embedding_service, _pinecone_client, _kno
 _llm_service = LLMService(_openai_client)
 _prompt_service = PromptService()
 _evaluation_service = EvaluationService(_llm_service)
+_tracing_service = TracingService()
 
 # ── Agent wiring ──────────────────────────────────────────────────────────────
+# One shared TracingService instance goes into every agent whose stage is worth tracing
+# (the reasoning/decision steps in the "At a Glance" diagram) - Memory Agent and
+# Observability Agent are deliberately excluded, since they're bookkeeping steps already
+# logged to SQLite, not AI decision points LangSmith is meant to explain.
 _memory = MemoryAgent(_student_repo, _profile_repo, _message_repo, _summary_repo)
-_input_guardrail = InputGuardrailAgent()
-_discovery = DiscoveryAgent(_llm_service)
-_retrieval = RetrievalAgent(_retrieval_service)
-_recommendation = RecommendationAgent(_llm_service, _prompt_service)
-_path_planning = PathPlanningAgent(_llm_service)
-_guardrail = GuardrailAgent()
-_evaluation = EvaluationAgent(_evaluation_service)
+_input_guardrail = InputGuardrailAgent(tracing_service=_tracing_service)
+_discovery = DiscoveryAgent(_llm_service, tracing_service=_tracing_service)
+_retrieval = RetrievalAgent(_retrieval_service, tracing_service=_tracing_service)
+_recommendation = RecommendationAgent(_llm_service, _prompt_service, tracing_service=_tracing_service)
+_path_planning = PathPlanningAgent(_llm_service, tracing_service=_tracing_service)
+_guardrail = GuardrailAgent(tracing_service=_tracing_service)
+_evaluation = EvaluationAgent(_evaluation_service, tracing_service=_tracing_service)
 _observability = ObservabilityAgent(_observability_repo)
 
 
@@ -71,6 +77,12 @@ _HIGH_RISK_SAFE_NOTE = (
 _REVISION_NEEDED_NOTE = (
     "This guidance may need more information to be more precise. Sharing GPA, location, "
     "budget, or preferred learning style can improve the recommendation."
+)
+
+_PROMPT_INJECTION_SAFE_RESPONSE = (
+    "I want to keep our conversation focused on your career and college questions. "
+    "Could you tell me more about your interests, or ask me something about careers, "
+    "majors, or colleges you're curious about?"
 )
 
 
@@ -250,6 +262,91 @@ def _generate_and_score(
     return recommendations, path_plan, response_text, response_payload, guardrail, evaluation
 
 
+def _blocked_turn_result(
+    student_name: str,
+    user_message: str,
+    student_id,
+    memory: dict,
+    input_guardrail_flags: list,
+    start_time: float,
+    usage: UsageTracker,
+) -> dict:
+    """
+    Short-circuits the turn when the input guardrail flags a prompt-injection attempt -
+    the only input guardrail flag that actually blocks (profanity/frustration remain
+    detection-only, per decision D023's original scope, unchanged by this). No LLM call
+    is ever made on this path, so a blocked turn costs $0.00 and adds no LLM-driven
+    latency - only the local memory/SQLite work already done before this point runs.
+    """
+    response_text = _PROMPT_INJECTION_SAFE_RESPONSE
+    end_time = time.perf_counter()
+
+    log_id = None
+    try:
+        prompt_tokens, completion_tokens = usage.totals()
+        log_id = _observability.log_turn({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "student_id": student_id,
+            "student_name": student_name,
+            "user_message": user_message,
+            "model": config.DEFAULT_MODEL,
+            "evaluation_model": config.EVAL_MODEL,
+            "embedding_model": config.EMBEDDING_MODEL,
+            "retrieved_document_count": 0,
+            "guardrail_flags": [],
+            "guardrail_risk_level": "high",
+            "input_guardrail_flags": input_guardrail_flags,
+            "evaluation_score": 0,
+            "quality_badge": "blocked",
+            "evaluation_scores": {},
+            "prompt_versions": config.prompt_version_metadata(),
+            "revision_attempted": False,
+            "latency_ms": int((end_time - start_time) * 1000),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "token_usage_by_model": usage.by_model(),
+            "estimated_cost": usage.estimated_cost_usd(),
+            "error": "blocked_prompt_injection",
+        })
+    except Exception:
+        pass
+
+    _memory.save_turn(
+        student_name=student_name,
+        user_message=user_message,
+        assistant_response=response_text,
+        metadata={"evaluation_score": 0, "guardrail_flags": []},
+    )
+
+    return {
+        "student_name": student_name,
+        "response": response_text,
+        "quality_badge": "blocked",
+        "guardrail_flags": [],
+        "guardrail_risk_level": "high",
+        "guardrail_required_revisions": [],
+        "input_guardrail_flags": input_guardrail_flags,
+        "evaluation_score": 0,
+        "evaluation_feedback": [],
+        "evaluation_scores": {},
+        "evaluation_requires_revision": False,
+        "revision_attempted": False,
+        "retrieved_document_count": 0,
+        "retrieved_documents": [],
+        "recommendations": [],
+        "recommendation_summary": "",
+        "follow_up_question": "",
+        "profile": memory.get("profile", {}),
+        "missing_information": [],
+        "next_question": "",
+        "path_plan": {},
+        "observability_log_id": log_id,
+        "token_usage_by_model": usage.by_model(),
+        "estimated_cost_usd": usage.estimated_cost_usd(),
+        **config.prompt_version_metadata(),
+    }
+
+
 def submit_feedback(log_id: int, helpful: bool, feedback_text: str | None = None) -> None:
     """Records human-in-the-loop feedback against one observability log row. Swallows failures."""
     try:
@@ -292,9 +389,10 @@ def run_turn(student_name: str, user_message: str) -> dict:
     Coordinates all agents in sequence and returns a typed result dict.
 
     Agent sequence:
-      input guardrail → memory.load → [discovery ‖ retrieval] → merge profile →
-      match previous choice → recommendation → path_planning → guardrail → evaluation →
-      (critic/revision retry, max 1) → remember recommendations → observability → memory.save
+      input guardrail → memory.load → (block here if prompt injection detected) →
+      [discovery ‖ retrieval] → merge profile → match previous choice → recommendation →
+      path_planning → guardrail → evaluation → (critic/revision retry, max 1) →
+      remember recommendations → observability → memory.save
 
     Discovery and Retrieval run concurrently on worker threads: Discovery only needs the
     pre-turn profile from memory.load, and Retrieval only needs the raw user_message (its
@@ -304,13 +402,24 @@ def run_turn(student_name: str, user_message: str) -> dict:
     start_time = time.perf_counter()
     usage = UsageTracker()
 
-    # 1. Input guardrail - detection only, a pure function of the raw message, so it can run
-    # before memory load with no change in output.
+    # 1. Input guardrail - detection only for profanity/frustration (D023's original
+    # scope, unchanged), but prompt_injection_detected now actually blocks (see step 2b).
+    # A pure function of the raw message, so it can run before memory load either way.
     input_guardrail = _input_guardrail.check_input(user_message)
+    input_guardrail_flags = input_guardrail.get("flags", [])
 
-    # 2. Load memory (profile + recent messages)
+    # 2. Load memory (profile + recent messages) - needed either way, to populate the
+    # response and to log/save the turn even if step 2b blocks it below.
     memory = _memory.load_memory(student_name)
     student_id = memory.get("student_id")
+
+    # 2b. Block on a detected prompt-injection attempt only - no LLM call has been made
+    # yet, so this costs nothing. Everything past this point (Discovery, Retrieval,
+    # Recommendation, Path Planning, output Guardrail, Evaluation) is skipped entirely.
+    if "prompt_injection_detected" in input_guardrail_flags:
+        return _blocked_turn_result(
+            student_name, user_message, student_id, memory, input_guardrail_flags, start_time, usage,
+        )
 
     # 3 & 4. Discovery (needs memory's pre-turn profile) and Retrieval (needs only the
     # message) are independent of each other, so they run concurrently. Both are I/O-bound
@@ -341,8 +450,6 @@ def run_turn(student_name: str, user_message: str) -> dict:
         student_name=student_name,
         profile_updates=discovery["student_profile_updates"],
     )
-
-    input_guardrail_flags = input_guardrail.get("flags", [])
 
     # 4c. Check whether this message names one of last turn's offered recommendations
     # (e.g. answering "Which of these resonates most with you?") - if so, the path plan

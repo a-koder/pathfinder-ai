@@ -8,6 +8,18 @@ This document defines the input/output shapes for every agent in PathFinder AI. 
 
 ---
 
+## Agent Persona
+
+The system doesn't just return structured data — the `response` text a student actually reads has a deliberate voice, set in `src/prompts/recommendation/v1.md`:
+
+- **Name:** PathFinder
+- **Tone:** Warm, encouraging, honest, and practical — like a counselor who already knows the student, not a search engine reading off a list
+- **Rules that hold across every response:** never guarantee admission, salary, or job security; always include at least one less-obvious option alongside familiar ones when the data supports it; end with one follow-up question, never several at once
+
+This shows up directly in the demo — the difference between "Data Analyst: high-paying field with strong job security" (a claim the guardrails would catch) and "Data Analyst: turns raw numbers into decisions that change how hospitals and governments operate" (grounded, exciting, and something the model is actually allowed to say) is this persona doing its job.
+
+---
+
 ## Prompt Governance
 
 Every LLM-facing prompt is externalized and versioned (decision D020) — none are hardcoded in agent code anymore.
@@ -34,15 +46,17 @@ Every agent constructor accepts an optional `prompt_version` (or `ruleset_versio
 | Agent | File | Key Method | When Called | Service Dependencies |
 |---|---|---|---|---|
 | Orchestrator | `src/agents/orchestrator.py` | `run_turn(student_name, user_message)` | Every conversation turn | All agents + services (injected) |
-| Input Guardrail Agent | `src/agents/input_guardrail_agent.py` | `check_input(user_message)` | First step in the turn, before memory load | None (rule-based only) |
+| Input Guardrail Agent | `src/agents/input_guardrail_agent.py` | `check_input(user_message)` | First step in the turn, before memory load | `TracingService` (optional) |
 | Memory Agent | `src/agents/memory_agent.py` | `load_memory()`, `update_profile()`, `save_turn()` | Load right after the input guardrail; merge after Discovery; save at turn end | `StudentRepository`, `ProfileRepository`, `MessageRepository`, `ConversationSummaryRepository` |
-| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Retrieval, after memory load | `LLMService` |
-| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | Concurrently with Discovery, after memory load | `RetrievalService` |
-| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Discovery and Retrieval both complete and the profile is merged | `LLMService`, `PromptService` |
-| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation | `LLMService` |
-| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning, before Evaluation | None (rule-based only) |
-| Evaluation Agent | `src/agents/evaluation_agent.py` | `evaluate()` | After Guardrail | `EvaluationService` |
+| Discovery Agent | `src/agents/discovery_agent.py` | `extract_profile_updates()` | Concurrently with Retrieval, after memory load | `LLMService`, `TracingService` (optional) |
+| Retrieval Agent | `src/agents/retrieval_agent.py` | `retrieve_relevant_context()` | Concurrently with Discovery, after memory load | `RetrievalService`, `TracingService` (optional) |
+| Recommendation Agent | `src/agents/recommendation_agent.py` | `generate_recommendations()` | After Discovery and Retrieval both complete and the profile is merged | `LLMService`, `PromptService`, `TracingService` (optional) |
+| Path Planning Agent | `src/agents/path_planning_agent.py` | `generate_path_plan()` | After Recommendation | `LLMService`, `TracingService` (optional) |
+| Guardrail Agent | `src/agents/guardrail_agent.py` | `check_guardrails()` | After Path Planning, before Evaluation | `TracingService` (optional) |
+| Evaluation Agent | `src/agents/evaluation_agent.py` | `evaluate()` | After Guardrail | `EvaluationService`, `TracingService` (optional) |
 | Observability Agent | `src/agents/observability_agent.py` | `log_turn()` | End of every turn | `ObservabilityRepository` |
+
+**"Optional" above means the constructor accepts `tracing_service: TracingService | None = None` and falls back to constructing its own (safe, no-op-when-unconfigured) instance if none is given — so every existing call site that constructs an agent directly, including the test scripts, keeps working unchanged. In the running app, `orchestrator.py` injects one shared `TracingService` instance into all seven, so a single client connection (when tracing is actually enabled) serves the whole turn.**
 
 ## Dependency Injection Pattern
 
@@ -70,18 +84,21 @@ retrieval_service = RetrievalService(embedding_service, pinecone_client, knowled
 llm_service = LLMService(openai_client)
 prompt_service = PromptService()
 evaluation_service = EvaluationService(llm_service)
+tracing_service = TracingService()
 
 # Agents — receive only what they need
 memory = MemoryAgent(student_repo, profile_repo, message_repo, summary_repo)
-input_guardrail = InputGuardrailAgent()
-discovery = DiscoveryAgent(llm_service)
-retrieval = RetrievalAgent(retrieval_service)
-recommendation = RecommendationAgent(llm_service, prompt_service)
-path_planning = PathPlanningAgent(llm_service)
-guardrail = GuardrailAgent()
-evaluation = EvaluationAgent(evaluation_service)
+input_guardrail = InputGuardrailAgent(tracing_service=tracing_service)
+discovery = DiscoveryAgent(llm_service, tracing_service=tracing_service)
+retrieval = RetrievalAgent(retrieval_service, tracing_service=tracing_service)
+recommendation = RecommendationAgent(llm_service, prompt_service, tracing_service=tracing_service)
+path_planning = PathPlanningAgent(llm_service, tracing_service=tracing_service)
+guardrail = GuardrailAgent(tracing_service=tracing_service)
+evaluation = EvaluationAgent(evaluation_service, tracing_service=tracing_service)
 observability = ObservabilityAgent(observability_repo)
 ```
+
+The same `tracing_service` instance is passed to all seven — one shared client connection, not one per agent. This is the same dependency-injection style every other cross-cutting service already follows (`llm_service` reused across four agents above); tracing was the one exception before this pass, importing `langsmith` as a bare module call from inside `EvaluationAgent` instead of receiving it as a constructor argument.
 
 **What this enables:**
 - In tests, pass a fake `LLMService` to any agent — no real API key needed (see `src/scripts/test_*.py`, which mostly use the real services against live APIs, but the agents themselves don't care)
@@ -96,7 +113,7 @@ observability = ObservabilityAgent(observability_repo)
 
 **When called:** On every student message, via `run_turn(student_name, user_message)`.
 
-**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `_match_previous_choice()` (checks whether this message names one of last turn's offered recommendations, decision D028) → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` (using the matched item as `selected_override` if one was found) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results and the same `selected_override`) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (persists this turn's offered items for the next turn's choice matching) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
+**Actual flow:** `input_guardrail.check_input(user_message)` → `memory.load_memory()` → (if `prompt_injection_detected` fired, short-circuit here and return a blocked-turn result — see decision D032 and the Input Guardrail Agent section below; everything past this point assumes it did not) → **`discovery.extract_profile_updates()` ‖ `retrieval.retrieve_relevant_context()` (concurrent)** → `memory.update_profile()` → `_match_previous_choice()` (checks whether this message names one of last turn's offered recommendations, decision D028) → `recommendation.generate_recommendations()` → `path_planning.generate_path_plan()` (using the matched item as `selected_override` if one was found) → `guardrail.check_guardrails()` → (append safe note if high/medium risk) → `evaluation.evaluate()` → **critic/revision loop** (if `evaluation.requires_revision` is true: regenerate recommendation → path plan → guardrail → evaluation exactly once more, reusing the same retrieval results and the same `selected_override`) → (append "needs more info" note if the possibly-revised `requires_revision` is still true) → `memory.remember_last_recommendations()` (persists this turn's offered items for the next turn's choice matching) → **enrichment** (fun facts + future outlook, display-only) → `observability.log_turn()` → `memory.save_turn()` → return.
 
 **Parallelization (decision D025):** Discovery and Retrieval both depend only on memory load's output — Discovery needs the pre-turn profile, Retrieval only needs the raw message (its `profile` argument is accepted but unused, see Retrieval Agent below) — and neither depends on the other's output, so they run concurrently via `concurrent.futures.ThreadPoolExecutor(max_workers=2)` in `orchestrator.run_turn()`. Both are I/O-bound network calls (OpenAI / Pinecone through a shared, thread-safe SDK client), so this overlaps wait time rather than parallelizing CPU work — no change in output for any given input, only latency. The Input Guardrail check was also moved to run before memory load, since it is a pure function of `user_message` alone and has no dependency on memory either way.
 
@@ -141,10 +158,11 @@ observability = ObservabilityAgent(observability_repo)
 The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Governance above) — static per process, not computed per turn, but included on every result for traceability. `observability_log_id` is the `observability_logs.log_id` row written by this turn (or `None` if logging failed) — the UI uses it to wire the 👍/👎 feedback buttons to `ObservabilityRepository.save_feedback()`, via a thin `submit_feedback(log_id, helpful, feedback_text=None)` wrapper in `orchestrator.py` (so `app.py` never imports repositories directly).
 
 **Failure behavior:**
+- A detected `prompt_injection_detected` input flag blocks the turn entirely (decision D032) — a fixed safe response is returned and Discovery/Retrieval/Recommendation/Path Planning/Guardrail/Evaluation are all skipped; see the Input Guardrail Agent section below.
 - A guardrail `risk_level: high` gets a fixed safe note appended to the response (never returned unmodified); `medium` gets a "keep in mind" limitations note built from `required_revisions`.
 - If `evaluation.requires_revision` is still true after the critic/revision retry (see above), a short note is appended asking the student to share more profile detail.
 - Logging failures (`observability.log_turn()`) are swallowed at both the agent and orchestrator call site — a broken log write never breaks the response; `observability_log_id` is simply `None` in that case, and the feedback buttons don't render.
-- Retrieval, LLM generation, and profile persistence each degrade independently (see `docs/10_Error_Handling_and_Fallbacks.md`); there is no single global exception handler around the whole turn today — each stage is responsible for its own safe fallback.
+- Retrieval, LLM generation, and profile persistence each degrade independently (see the Retrieval Agent, Recommendation Agent, and Memory Agent sections below for each one's specific fallback); there is no single global exception handler around the whole turn today — each stage is responsible for its own safe fallback.
 
 ---
 
@@ -195,9 +213,9 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 ## 3. Input Guardrail Agent
 
-**Responsibility:** Rule-based, LLM-free pre-generation safety check on the raw student message. Runs immediately after memory load, before any other agent sees the message — detection only, it flags but never blocks or rewrites the message.
+**Responsibility:** Rule-based, LLM-free pre-generation safety check on the raw student message, run before any other agent sees it. `profanity_detected` and `frustration_detected` are detection-only, exactly as originally scoped in decision D023. `prompt_injection_detected` is no longer detection-only (decision D032): it blocks the turn.
 
-**When called:** After `memory.load_memory()`, before Discovery Agent.
+**When called:** First step of the turn, before `memory.load_memory()` (this agent is a pure function of the raw message, so it has no dependency on stored state — decision D025). The block itself, when it fires, is applied right after memory load, so the response can still reflect the student's existing profile/`student_id` for logging even on a blocked turn — see the Orchestrator section above.
 
 **Input:** `check_input(user_message)`.
 
@@ -221,11 +239,13 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Matching:** `\b`-anchored regex word-boundary matching against phrase lists — chosen specifically to avoid single-word terms false-triggering inside legitimate words.
 
-**Orchestrator behavior on the result:** Flags are recorded on the turn (`input_guardrail_flags` in the result dict and the `observability_logs` row) and shown in the UI's collapsed "Technical details" section; the turn proceeds unchanged regardless of flags — this agent informs observability, it does not gate the conversation.
+**Orchestrator behavior on the result:** Flags are always recorded on the turn (`input_guardrail_flags` in the result dict and the `observability_logs` row) and shown in the UI's collapsed "Technical details" section. For `profanity_detected`/`frustration_detected`, that's the entire effect — the turn proceeds unchanged. For `prompt_injection_detected`, the orchestrator short-circuits: Discovery, Retrieval, Recommendation, Path Planning, output Guardrail, and Evaluation are all skipped entirely, and a fixed safe response (`_PROMPT_INJECTION_SAFE_RESPONSE`) is returned instead. No LLM call is made on the blocked path, so it costs $0.00 and the response is essentially instant (~0.1s, measured).
 
 **Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail.
 
 **Ruleset:** `src/prompts/input_guardrail/v1.yaml`, loaded via `PromptLoader.load_ruleset()` (see Prompt Governance above). All 3 flags' phrases live in this file — `input_guardrail_agent.py` contains only the matching logic, no hardcoded phrase lists.
+
+**Optional tracing:** if a `TracingService` is injected and LangSmith is configured, every call emits an `input_guardrail` trace (message, flags, pass/fail) via the same shared instance every other traced agent receives.
 
 ---
 
@@ -264,6 +284,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Prompt:** `src/prompts/discovery/v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
 
+**Optional tracing:** emits a `discovery` trace (student name, message, confidence) via the injected `TracingService`, when configured.
+
 ---
 
 ## 5. Retrieval Agent
@@ -297,6 +319,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 - `retrieval_confidence` is the average score across the returned documents
 
 **Failure behavior:** If Pinecone is unavailable, `RetrievalService` falls back to `KnowledgeLoader.search_by_tags()` (local tag-intersection search) transparently — the agent normalizes either result shape into the contract above without the caller needing to know which path was used.
+
+**Optional tracing:** emits a `retrieval` trace (query, retrieved document titles, retrieval confidence) via the injected `TracingService`, when configured.
 
 ---
 
@@ -345,6 +369,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Not part of this agent's contract:** `fun_facts` and `future_outlook`, which appear on recommendation items in the final orchestrator result, are *not* generated here — they are added afterward by `orchestrator._enrich_recommendations()` (decision D026, see Orchestrator section above) via a separate, unversioned, display-only LLM call that runs after evaluation. `RecommendationAgent.generate_recommendations()` itself never returns those two fields.
 
+**Optional tracing:** emits a `recommendation` trace (message, retrieved document count, recommendation titles, whether the fallback was used) via the injected `TracingService`, when configured.
+
 ---
 
 ## 7. Path Planning Agent
@@ -382,6 +408,8 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 **Failure behavior:** If the model output is unusable or no recommendation exists to plan around, returns a generic 3-step fallback roadmap ("talk to a counselor" / "explore related clubs" / "research colleges as application season approaches") instead of crashing.
 
 **Prompt:** `src/prompts/path_planning/v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
+
+**Optional tracing:** emits a `path_planning` trace (selected title, choice source, resulting path) via the injected `TracingService`, when configured.
 
 ---
 
@@ -422,9 +450,11 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Orchestrator behavior on the result:** `risk_level: high` → a fixed safe note is appended to the response ("...Final college or career decisions should be discussed with a counselor, parent, or trusted advisor."). `risk_level: medium` → a "Keep in mind: ..." note built from `required_revisions` is appended. `low` → response returned unmodified.
 
-**Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail. An unhandled exception here would propagate to the orchestrator like any other agent failure (see `docs/10_Error_Handling_and_Fallbacks.md`).
+**Failure behavior:** The agent is pure Python string/dict logic with no I/O — there is no external call that can fail.
 
 **Ruleset:** `src/prompts/guardrail/v1.yaml`, loaded via `PromptLoader.load_ruleset()` (see Prompt Governance above). All 10 flags' phrases, keywords, connectors/traits, risk levels, and revision text live in this file — `guardrail_agent.py` contains only the matching logic, no hardcoded phrase lists.
+
+**Optional tracing:** emits a `guardrail` trace (message, flags, risk level) via the injected `TracingService`, when configured.
 
 ---
 
@@ -471,7 +501,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** If both the LLM judge and the rule-based fallback fail (should not happen in practice — the fallback has no external dependencies), returns a `quality_badge: "not_evaluated"` result with zeroed scores rather than crashing the turn.
 
-**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via `src/services/tracing_service.py`. The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 6 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
+**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via the injected `TracingService` (same instance every other traced agent receives — see Dependency Injection Pattern above). The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 6 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
 
 **Prompt:** `src/prompts/evaluation/rascef_v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
 
