@@ -1,17 +1,7 @@
 # PathFinder AI — Documentation Index
 
-This is the map for every doc in `docs/`. Start here.
-
-**Naming note:** the requested path was `docs/00_Documentation_Index.md`, but `00` is
-already `00_PROJECT_CHARTER.md` and every number below it maps 1:1 to a single doc — adding
-a second `00_` file would break that convention rather than extend it. This file lives at
-`docs/README.md` instead, which GitHub renders automatically when browsing the `docs/`
-folder. No existing files were renumbered.
-
-Two starting points depending on who you are:
-- **New to the project (human):** read this page top to bottom.
-- **A Claude Code session:** read `docs/99_REFERENCE.md` first — it's written specifically
-  to orient a coding session in one pass; load the detailed docs below only as needed.
+This is the map for every doc in `docs/`. Start here, then dive into whatever topic you
+need from the table below.
 
 ---
 
@@ -55,9 +45,8 @@ Two starting points depending on who you are:
 | 14 | [`14_Presentation_Deck.md`](14_Presentation_Deck.md) | Marp-flavored capstone slide deck, speaker notes, demo script |
 | 19 | [`19_Future_Vision.md`](19_Future_Vision.md) | Realistic next steps beyond the MVP, each tied to an existing extension point |
 | 25 | [`25_Capstone_Review.md`](25_Capstone_Review.md) | Honest self-assessment: strengths, weaknesses, gaps, rubric estimate |
-| 99 | [`99_REFERENCE.md`](99_REFERENCE.md) | Compact reference — read this first in a Claude Code session |
 
-**Numbering gap (15–18, 20–24):** reserved, unused. Not a sign of missing docs — just room for future additions without renumbering anything.
+**Numbering gap (15–18, 20–24, 99):** reserved, unused. Not a sign of missing docs — just room for future additions without renumbering anything.
 
 ---
 

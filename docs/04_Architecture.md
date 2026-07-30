@@ -168,7 +168,6 @@ Distinct from `PromptService` (Layer 3, above — formats profile/retrieval cont
 
 ```
 pathfinder-ai/
-├── CLAUDE.md
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
