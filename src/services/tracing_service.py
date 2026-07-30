@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 import config
+from infrastructure.langsmith_client import LangSmithClient
 
 _client = None
 _client_initialized = False
@@ -22,8 +23,7 @@ def _get_client():
         return None
 
     try:
-        from langsmith import Client
-        _client = Client(api_key=config.LANGSMITH_API_KEY)
+        _client = LangSmithClient()
     except Exception:
         _client = None
     return _client
@@ -57,12 +57,12 @@ def trace_event(name: str, inputs: dict, outputs: dict, metadata: dict | None = 
         now = datetime.datetime.now(datetime.timezone.utc)
         full_metadata = {**_governance_metadata(), **(metadata or {})}
         client.create_run(
-            id=uuid.uuid4(),
+            run_id=uuid.uuid4(),
             name=name,
             run_type="chain",
             inputs=inputs or {},
             outputs=outputs or {},
-            extra={"metadata": full_metadata},
+            metadata=full_metadata,
             project_name=config.LANGSMITH_PROJECT,
             start_time=now,
             end_time=now,

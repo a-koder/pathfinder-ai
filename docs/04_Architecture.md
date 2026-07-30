@@ -128,7 +128,7 @@ Services orchestrate infrastructure for agents. Each service wraps one or more i
 | `RetrievalService` | `retrieval_service.py` | Build query, embed it, call Pinecone; fall back to local JSON tag-match on failure |
 | `PromptService` | `prompt_service.py` | Format student profile + retrieved context + history into prompt text |
 | `EvaluationService` | `evaluation_service.py` | RASCEF LLM-as-judge via GPT-4o; rule-based fallback evaluator |
-| `TracingService` | `tracing_service.py` | Optional, no-op-safe LangSmith event logging |
+| `TracingService` | `tracing_service.py` | Optional, no-op-safe LangSmith event logging; delegates the actual SDK call to `LangSmithClient` |
 
 ### Layer 4 — Repositories (`src/repositories/`)
 Each repository is responsible for one table. All SQL lives here.
@@ -142,7 +142,7 @@ Each repository is responsible for one table. All SQL lives here.
 | `ObservabilityRepository` | `observability_repository.py` | `observability_logs` | `save_log(event)`, `get_recent_logs(limit)`, `get_logs_for_student(student_id, limit)` |
 
 ### Layer 5 — Infrastructure (`src/infrastructure/`)
-Concrete external adapters. Only this layer imports `openai`, `pinecone`, or `sqlite3`.
+Concrete external adapters. Only this layer imports `openai`, `pinecone`, `sqlite3`, or `langsmith`.
 
 | Client | File | Wraps |
 |---|---|---|
@@ -150,6 +150,7 @@ Concrete external adapters. Only this layer imports `openai`, `pinecone`, or `sq
 | `PineconeClient` | `pinecone_client.py` | `pinecone.Pinecone()` — index init, upsert, query |
 | `SQLiteClient` | `sqlite_client.py` | `sqlite3` — connection management, schema init, migrations |
 | `KnowledgeLoader` | `knowledge_loader.py` | Load and parse `careers.json`, `majors.json`, `colleges.json`, `interests.json`; local tag-match fallback search |
+| `LangSmithClient` | `langsmith_client.py` | `langsmith.Client()` — creates one run per trace event |
 
 ### Layer 6 — Domain (`src/schemas/`)
 Pure Pydantic models. No imports from any other layer.
@@ -216,7 +217,8 @@ pathfinder-ai/
 │   │   ├── openai_client.py
 │   │   ├── pinecone_client.py
 │   │   ├── sqlite_client.py
-│   │   └── knowledge_loader.py
+│   │   ├── knowledge_loader.py
+│   │   └── langsmith_client.py
 │   │
 │   ├── schemas/                            # Domain models
 │   │   └── models.py

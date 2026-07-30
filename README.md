@@ -25,7 +25,7 @@ Presentation   src/app.py                Streamlit UI — no business logic
 Application    src/agents/                10 agents + orchestrator
 Service        src/services/              LLM, embeddings, retrieval, prompts, evaluation, tracing
 Repository     src/repositories/          All SQL lives here
-Infrastructure src/infrastructure/        Only layer that imports openai / pinecone / sqlite3
+Infrastructure src/infrastructure/        Only layer that imports openai / pinecone / sqlite3 / langsmith
 Domain         src/schemas/models.py      Reference Pydantic models
 ```
 
@@ -178,7 +178,9 @@ LANGSMITH_PROJECT=pathfinder-ai
 LANGSMITH_TRACING=true
 ```
 
-Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. When enabled, every trace is auto-enriched (centrally, in `tracing_service.py`) with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
+Unset, unconfigured, or unreachable — the app works identically either way. Every tracing call is wrapped so a LangSmith outage can never break a turn. `TracingService` (`src/services/tracing_service.py`) owns that safety wrapper, governance-metadata enrichment, and the lazy singleton client; it delegates the actual SDK call to `LangSmithClient` (`src/infrastructure/langsmith_client.py`), the same pattern every other external dependency (OpenAI, Pinecone, SQLite) follows. When enabled, every trace is auto-enriched with the 6 prompt/ruleset version tags plus an overall `agent_version` — callers never need to know about prompt versioning to produce a fully-tagged trace. `EvaluationAgent._trace()` additionally sets evaluation score, quality badge, guardrail flags/risk level, `input_guardrail_flags`, and `revision_attempted` explicitly on every trace.
+
+**Scope today:** only `EvaluationAgent` calls `trace_event()` — Discovery, Retrieval, Recommendation, Path Planning, and the guardrail checks aren't traced. This was scoped that way from the start (decisions D016/D022 introduced LangSmith specifically for evaluation/prompt-governance auditing) and never expanded to cover the rest of the turn — a real gap, not a technical limitation.
 
 ---
 
@@ -307,7 +309,7 @@ pathfinder-ai/
 │   ├── agents/                   # 10 agents + orchestrator
 │   ├── services/                 # LLM, embeddings, retrieval, prompts, evaluation, tracing
 │   ├── repositories/              # All SQL
-│   ├── infrastructure/           # OpenAI, Pinecone, SQLite, KnowledgeLoader adapters
+│   ├── infrastructure/           # OpenAI, Pinecone, SQLite, KnowledgeLoader, LangSmith adapters
 │   ├── schemas/models.py         # Reference domain models
 │   ├── prompts/                  # Externalized, versioned prompts (discovery, recommendation,
 │   │                              #   path_planning, evaluation .md; guardrail + input_guardrail .yaml rulesets)
