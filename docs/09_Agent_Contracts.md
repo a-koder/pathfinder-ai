@@ -26,10 +26,13 @@ Every LLM-facing prompt is externalized and versioned (decision D020) — none a
 
 | Component | Prompt file | Configured via | Default |
 |---|---|---|---|
-| Discovery Agent | `src/prompts/discovery/v1.md` | `DISCOVERY_PROMPT_VERSION` | `v1` |
+| Discovery Agent | `src/prompts/discovery/v2.md` | `DISCOVERY_PROMPT_VERSION` | `v2` |
+| Intent Router Agent | `src/prompts/intent_router/v4.md` | `INTENT_ROUTER_PROMPT_VERSION` | `v4` |
 | Recommendation Agent | `src/prompts/recommendation/v1.md` | `RECOMMENDATION_PROMPT_VERSION` | `v1` |
 | Path Planning Agent | `src/prompts/path_planning/v1.md` | `PATH_PLANNING_PROMPT_VERSION` | `v1` |
 | Evaluation Service (RASCEF judge) | `src/prompts/evaluation/rascef_v1.md` | `EVALUATION_PROMPT_VERSION` | `rascef_v1` |
+| Orchestrator (general_chat reply generation) | `src/prompts/general_chat/v1.md` | `GENERAL_CHAT_PROMPT_VERSION` | `v1` |
+| Orchestrator (suggest reply generation) | `src/prompts/suggestions/v1.md` | `SUGGESTIONS_PROMPT_VERSION` | `v1` |
 | Guardrail Agent (ruleset, not a prompt — no LLM call) | `src/prompts/guardrail/v1.yaml` | `GUARDRAIL_RULESET_VERSION` | `v1` |
 | Input Guardrail Agent (ruleset, not a prompt — no LLM call) | `src/prompts/input_guardrail/v1.yaml` | `INPUT_GUARDRAIL_RULESET_VERSION` | `v1` |
 
@@ -37,7 +40,7 @@ Every LLM-facing prompt is externalized and versioned (decision D020) — none a
 
 Every agent constructor accepts an optional `prompt_version` (or `ruleset_version` for `GuardrailAgent` / `InputGuardrailAgent`) override; when omitted, it reads the matching `config.py` constant. Bumping a version (env var or constructor arg) requires no code change.
 
-`config.prompt_version_metadata()` is the single source of truth for the version tags attached to every turn: `discovery_prompt_version`, `recommendation_prompt_version`, `path_planning_prompt_version`, `evaluation_prompt_version`, `guardrail_ruleset_version`, `input_guardrail_ruleset_version` (each formatted as `"<component>_<version>"`, e.g. `"discovery_v1"`, except evaluation whose configured version already includes the framework name). This same dict is merged into: the `run_turn()` return value, every `observability_logs` row (`prompt_versions` column, JSON), and every LangSmith trace (`tracing_service._governance_metadata()`, which also adds `agent_version` from `config.AGENT_VERSION`).
+`config.prompt_version_metadata()` is the single source of truth for the version tags attached to every turn: `discovery_prompt_version`, `intent_router_prompt_version`, `recommendation_prompt_version`, `path_planning_prompt_version`, `evaluation_prompt_version`, `general_chat_prompt_version`, `suggestions_prompt_version`, `guardrail_ruleset_version`, `input_guardrail_ruleset_version` (each formatted as `"<component>_<version>"`, e.g. `"discovery_v2"`, except evaluation whose configured version already includes the framework name). This same dict is merged into: the `run_turn()` return value, every `observability_logs` row (`prompt_versions` column, JSON), and every LangSmith trace (`tracing_service._governance_metadata()`, which also adds `agent_version` from `config.AGENT_VERSION`).
 
 ---
 
@@ -288,7 +291,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** Same fallback as above - any exception or malformed model output resolves to `explore`, never a crash.
 
-**Prompt:** `src/prompts/intent_router/v2.md`, loaded via `PromptLoader` (see Prompt Governance above). v2 (decision D035) added an explicit worked example clarifying that `anchor_title` must never include the "(type)" annotation shown in the offered-items list - v1 let the model echo that annotation back, which a strict exact-match validation then rejected as a non-match, silently misrouting the turn to `explore`.
+**Prompt:** `src/prompts/intent_router/v4.md`, loaded via `PromptLoader` (see Prompt Governance above). v2 (decision D035) added an explicit worked example clarifying that `anchor_title` must never include the "(type)" annotation shown in the offered-items list - v1 let the model echo that annotation back, which a strict exact-match validation then rejected as a non-match, silently misrouting the turn to `explore`. v3 (decision D037) added the `suggest` intent. v4 (decision D037) added worked examples distinguishing pure interest-sharing from uncertainty-seeking-direction language ("I don't know what career I want"), fixing a regression where v3 misclassified the latter as `suggest` instead of `explore`.
 
 **Optional tracing:** emits an `intent_router` trace (message, resolved intent/anchor, whether `last_recommendations` existed) via the injected `TracingService`, when configured.
 
@@ -558,7 +561,7 @@ The `*_version` keys come from `config.prompt_version_metadata()` (see Prompt Go
 
 **Failure behavior:** If both the LLM judge and the rule-based fallback fail (should not happen in practice — the fallback has no external dependencies), returns a `quality_badge: "not_evaluated"` result with zeroed scores rather than crashing the turn.
 
-**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via the injected `TracingService` (same instance every other traced agent receives — see Dependency Injection Pattern above). The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 6 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
+**Optional tracing:** If LangSmith is configured (`LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set), each evaluation logs its inputs/outputs, model name, quality badge, evaluation score, guardrail flags, guardrail risk level, `input_guardrail_flags`, and `revision_attempted` via the injected `TracingService` (same instance every other traced agent receives — see Dependency Injection Pattern above). The first six are explicit fields `EvaluationAgent._trace()` builds itself; `trace_event()` additionally auto-merges in the 9 prompt/ruleset version tags plus `agent_version` underneath them — so the caller only has to know about the evaluation-specific fields, not prompt versioning. Because `evaluate()` runs once per attempt, a turn that hits the critic/revision loop produces two traces: the first with `revision_attempted: false`, the retry with `revision_attempted: true`. Tracing is a no-op when not configured, and any tracing failure is swallowed — it can never affect the response.
 
 **Prompt:** `src/prompts/evaluation/rascef_v1.md`, loaded via `PromptLoader` (see Prompt Governance above).
 

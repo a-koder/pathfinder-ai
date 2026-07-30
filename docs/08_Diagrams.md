@@ -136,33 +136,41 @@ sequenceDiagram
 flowchart LR
     subgraph Index ["Indexing Flow — One-Time Setup"]
         direction TB
-        C["careers.json"]
-        M["majors.json"]
-        CL["colleges.json"]
-        DB["Document Builder\nFormat text for embedding"]
+        C["careers.json (73)"]
+        M["majors.json (47)"]
+        CL["colleges.json (45)"]
+        IN["interests.json (58)"]
+        DB["Document Builder\nFormat text for embedding\n+ derive normalized state\nfrom college location (D033)"]
         EMB1["OpenAI text-embedding-3-small"]
-        PI["Pinecone Index\nWith metadata: doc_type, title, tags, gpa_band"]
+        PI["Pinecone Index\nWith metadata: doc_type, title, tags,\ngpa_band, college_type, state"]
         C --> DB
         M --> DB
         CL --> DB
+        IN --> DB
         DB --> EMB1 --> PI
     end
-    subgraph Query ["Query Flow — Per Conversation Turn"]
+    subgraph Query ["Query Flow — Per Conversation Turn (decisions D033/D034/D037)"]
         direction TB
-        Q1["Student Question"]
-        Q2["Student Profile\nInterests, GPA, Grade"]
-        QB["Query Builder\nCombine question + profile"]
+        Q1["Student Message"]
+        Q2["Profile Context\ninterests, strengths, favorite careers\n(folded into search text, not just\nthe literal message - D037)"]
+        Q3["anchor_context\n(related_topic only - grounds an\nambiguous follow-up like\ncolleges for same, D034)"]
+        QT["Combined Embedding Search Text"]
         EMB2["OpenAI text-embedding-3-small"]
-        PS["Pinecone Semantic Search\ntop-k with optional doc_type filter"]
-        RC["Retrieved Context\nTop-k careers, majors, colleges"]
-        LLM["GPT-4o-mini\nGenerates grounded response"]
-        Q1 --> QB
-        Q2 --> QB
-        QB --> EMB2 --> PS --> RC --> LLM
+        NC["search_non_colleges()\ncareers + majors + interests, blended"]
+        CG["search_colleges()\nstate + gpa_band filtered;\nbudget_preference soft-boosts\nPublic college_type, no hard filter"]
+        RC["Retrieved Context\nmerged non-college + college results"]
+        LLM["GPT-4o-mini\nGenerates grounded response\n(skipped for roadmap - reused verbatim;\nskipped for suggest - lightweight reply only)"]
+        Q1 --> QT
+        Q2 --> QT
+        Q3 --> QT
+        QT --> EMB2
+        EMB2 --> NC --> RC
+        EMB2 --> CG --> RC
+        RC --> LLM
     end
 ```
 
-**Why this matters:** Without RAG, the LLM recommends careers from its training data — generic, unverifiable, and potentially hallucinated. With Pinecone retrieval, every recommendation is traceable to a specific document in the knowledge base. The system cannot recommend a career that does not exist in the curated dataset.
+**Why this matters:** Without RAG, the LLM recommends careers from its training data — generic, unverifiable, and potentially hallucinated. With Pinecone retrieval, every recommendation is traceable to a specific document in the knowledge base. The system cannot recommend a career that does not exist in the curated dataset. The query side is intent-aware, not one-size-fits-all: `related_topic` grounds an ambiguous follow-up in what was actually being discussed, `related_topic`/`explore` fold in the student's already-known interests so a topically-thin message like "give me career choices" still retrieves relevant results, and college search specifically narrows by stated location/budget preferences rather than searching blind.
 
 ---
 
@@ -173,50 +181,59 @@ flowchart LR
 ```mermaid
 erDiagram
     STUDENTS {
-        string student_id PK
+        int student_id PK
         string name
         datetime created_at
         datetime last_seen_at
         int session_count
     }
     PROFILES {
-        string student_id FK
-        string grade_level
-        string gpa
-        string interests_json
-        string strengths_json
-        string favorite_careers_json
-        string college_preferences_json
+        int student_id PK, FK
+        string profile_json
         datetime updated_at
     }
     MESSAGES {
-        string message_id PK
-        string student_id FK
+        int message_id PK
+        int student_id FK
+        int session_number
         string role
         string content
-        datetime created_at
+        datetime timestamp
     }
     CONVERSATION_SUMMARIES {
-        string summary_id PK
-        string student_id FK
-        string summary
-        datetime updated_at
+        int summary_id PK
+        int student_id FK
+        int session_number
+        string summary_text
+        datetime created_at
     }
     OBSERVABILITY_LOGS {
         int log_id PK
         int student_id FK
+        datetime timestamp
+        string agent
         string model
+        string embedding_model
+        int prompt_tokens
+        int completion_tokens
         float estimated_cost_usd
         int latency_ms
-        int eval_score
-        string quality_badge
+        int retrieved_doc_count
         string guardrail_flags
         string input_guardrail_flags
+        string guardrail_risk_level
+        int eval_score
+        string evaluation_scores
+        string evaluation_model
+        string quality_badge
         bool revision_attempted
         string prompt_versions
+        string token_usage_by_model
         bool helpful
         string feedback_text
-        datetime timestamp
+        string student_name
+        string user_message
+        string error
     }
     STUDENTS ||--|| PROFILES : "has one"
     STUDENTS ||--o{ MESSAGES : "sends many"
@@ -225,9 +242,10 @@ erDiagram
 ```
 
 **Key design decisions:**
-- Profile is stored as JSON blobs — flexible enough to evolve without schema migrations
-- Messages are stored individually — enables conversation replay and context injection
-- Summaries are session-level — used to brief the LLM without injecting the full message history
+- Profile is a single `profile_json` blob column, not one column per field — the schema never needs a migration when a new profile attribute is added; only the JSON shape changes
+- Messages are stored individually, tagged with `session_number` — enables conversation replay and context injection, and lets summaries be scoped to one session
+- Summaries are session-level (`summary_text`, one row per `session_number`) — used to brief the LLM without injecting the full message history
+- `observability_logs` started with a small base schema and grew by additive `ALTER TABLE` migrations (`_migrate_observability_logs()`) as new capabilities (RASCEF scores, prompt governance, HITL feedback, per-model token accounting) were added — never a destructive schema change
 - Observability logs are tied to the student — enables per-student cost and quality analysis
 
 ---
@@ -290,7 +308,7 @@ flowchart TD
     CALL["Each Conversation Turn\nOrchestrator.run_turn()"]
     subgraph Meta ["Captured Metadata"]
         M1["Model names\ngeneration / evaluation / embedding"]
-        M2["Prompt versions\ndiscovery, recommendation, path_planning,\nrascef, guardrail, input_guardrail"]
+        M2["Prompt versions\ndiscovery, intent_router, recommendation,\npath_planning, rascef, general_chat,\nsuggestions, guardrail, input_guardrail"]
         M3["Estimated cost USD\nreal token counts via UsageTracker,\nsummed across every model called this turn"]
         M4["Latency ms\nRound-trip time for the full turn"]
         M5["Retrieved document count\nFrom Pinecone"]
@@ -325,21 +343,26 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph Files ["Prompt Files — src/prompts/<category>/<version>"]
-        F1["discovery/v1.md"]
-        F2["recommendation/v1.md"]
-        F3["path_planning/v1.md"]
-        F4["evaluation/rascef_v1.md"]
-        F5["guardrail/v1.yaml"]
-        F6["input_guardrail/v1.yaml"]
+        F1["discovery/v2.md"]
+        F2["intent_router/v4.md"]
+        F3["recommendation/v1.md"]
+        F4["path_planning/v1.md"]
+        F5["evaluation/rascef_v1.md"]
+        F6["general_chat/v1.md"]
+        F7["suggestions/v1.md"]
+        F8["guardrail/v1.yaml"]
+        F9["input_guardrail/v1.yaml"]
     end
     LOADER["Prompt Loader\nsrc/services/prompt_loader.py\nload_prompt() / load_ruleset()\nfunctools.lru_cache, path resolved\nfrom the loader's own file location"]
     subgraph Agents ["Agents"]
         A1["Discovery Agent"]
-        A2["Recommendation Agent"]
-        A3["Path Planning Agent"]
-        A4["Evaluation Agent\n(RASCEF judge)"]
-        A5["Guardrail Agent\n(rule-based, no LLM)"]
-        A6["Input Guardrail Agent\n(rule-based, no LLM)"]
+        A2["Intent Router Agent"]
+        A3["Recommendation Agent"]
+        A4["Path Planning Agent"]
+        A5["Evaluation Agent\n(RASCEF judge)"]
+        A6["Orchestrator\n(general_chat/suggest\ngeneration calls)"]
+        A7["Guardrail Agent\n(rule-based, no LLM)"]
+        A8["Input Guardrail Agent\n(rule-based, no LLM)"]
     end
     LLM["OpenAI LLMs\ngpt-4o-mini generation\ngpt-4o evaluation judge"]
     META["config.prompt_version_metadata()\nAttached to every orchestrator result,\nobservability log row, and LangSmith trace"]
@@ -347,11 +370,14 @@ flowchart TD
     F2 --> LOADER --> A2 --> LLM
     F3 --> LOADER --> A3 --> LLM
     F4 --> LOADER --> A4 --> LLM
-    F5 --> LOADER --> A5
-    F6 --> LOADER --> A6
-    A1 & A2 & A3 & A4 & A5 & A6 --> META
+    F5 --> LOADER --> A5 --> LLM
+    F6 --> LOADER --> A6 --> LLM
+    F7 --> LOADER --> A6
+    F8 --> LOADER --> A7
+    F9 --> LOADER --> A8
+    A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 --> META
 ```
 
-**Active versions today:** `discovery_v1`, `recommendation_v1`, `path_planning_v1`, `rascef_v1` (evaluation), `guardrail_v1`, `input_guardrail_v1`. Each is independently configured via `.env` (`DISCOVERY_PROMPT_VERSION`, `RECOMMENDATION_PROMPT_VERSION`, `PATH_PLANNING_PROMPT_VERSION`, `EVALUATION_PROMPT_VERSION`, `GUARDRAIL_RULESET_VERSION`, `INPUT_GUARDRAIL_RULESET_VERSION`) — bumping a prompt to a new version means adding a new file and changing one env var, no code change, and the previous version stays on disk for comparison or rollback.
+**Active versions today:** `discovery_v2`, `intent_router_v4`, `recommendation_v1`, `path_planning_v1`, `rascef_v1` (evaluation), `general_chat_v1`, `suggestions_v1`, `guardrail_v1`, `input_guardrail_v1`. Each is independently configured via `.env` (`DISCOVERY_PROMPT_VERSION`, `INTENT_ROUTER_PROMPT_VERSION`, `RECOMMENDATION_PROMPT_VERSION`, `PATH_PLANNING_PROMPT_VERSION`, `EVALUATION_PROMPT_VERSION`, `GENERAL_CHAT_PROMPT_VERSION`, `SUGGESTIONS_PROMPT_VERSION`, `GUARDRAIL_RULESET_VERSION`, `INPUT_GUARDRAIL_RULESET_VERSION`) — bumping a prompt to a new version means adding a new file and changing one env var, no code change, and the previous version stays on disk for comparison or rollback. `discovery` reached v2 when location/budget preference extraction was added (D033); `intent_router` reached v4 after two real bugs found in testing - v2 fixed an anchor-title formatting echo (D035), v3 added the `suggest` intent, v4 fixed a classification boundary that broke the acceptance suite and the capstone's own demo script (D037).
 
 **Why this matters for the capstone:** Prompt governance is what separates "I tuned a prompt until it worked" from "I can prove which prompt version produced which response, and roll back safely." The version tags aren't just logged — they're attached to every LangSmith trace, so a reviewer can filter by prompt version and see exactly how output quality changed between iterations.
