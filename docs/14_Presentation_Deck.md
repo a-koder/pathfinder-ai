@@ -151,9 +151,11 @@ This is the RAG layer, and it's the difference between a career counselor and a 
 hallucinator. Every career, major, and college in this system comes from a curated
 dataset — not the model's training data — retrieved from Pinecone using OpenAI embeddings.
 Two things make this more than "just search everything": metadata strategy — one Pinecone
-index, one namespace, filtered by document type and GPA band instead of juggling separate
-indexes — and query-time retrieval filtering, so a major-specific question only searches
-major documents. And grounding isn't just claimed: every recommendation carries an evidence
+index, one namespace, filtered by document type, GPA band, and now state instead of
+juggling separate indexes — and query-time retrieval filtering, so a major-specific
+question only searches major documents, and a stated location or budget preference
+actually narrows and re-ranks the colleges that come back, not just the same unfiltered
+list every time. And grounding isn't just claimed: every recommendation carries an evidence
 field pointing at the actual retrieved document, and a dedicated guardrail flag fires if one
 doesn't have it. If Pinecone is ever unreachable, it degrades gracefully to a local
 tag-based search instead of failing outright.
@@ -317,7 +319,7 @@ see Appendix D for the recommended live-talk cut (skip straight from slide 12 to
 |---|---|---|
 | Multi-Agent | ✅ | 10 agents + orchestrator, documented contracts (`docs/09`), 7/7 live acceptance run |
 | Tool Calling | ✅ | Agents invoke Pinecone retrieval, SQLite persistence, and OpenAI inference through injected service abstractions — never a raw SDK call |
-| RAG | ✅ | Pinecone + OpenAI embeddings, 223 docs, metadata filtering, tested local fallback |
+| RAG | ✅ | Pinecone + OpenAI embeddings, 223 docs, metadata filtering (incl. state/budget-aware college search, D033), tested local fallback |
 | Guardrails | ⚠️ Partial | Output guardrails enforce; input guardrails block on prompt-injection, detect-only on profanity/frustration by design; 2 output flags not yet reachable |
 | Evaluation | ✅ | RASCEF LLM-as-judge + rule-based fallback, 24/30 threshold, bounded retry (tested) |
 | Structured Outputs | ✅ | JSON contracts everywhere; reference Pydantic models exist, not yet runtime-enforced |
