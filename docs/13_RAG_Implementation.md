@@ -271,6 +271,8 @@ The decision to use a single `"default"` namespace instead of separate namespace
 
 **The metadata filter `{"doc_type": {"$eq": "career"}}` achieves the same isolation as a separate namespace — without the cross-query penalty.**
 
+**When this would actually be worth revisiting:** not for more doc types (that's a metadata-schema change, not a namespace one) - the real case for namespaces is hard tenant isolation. If PathFinder AI ever became multi-school/multi-district, a namespace per tenant would give a database-enforced guarantee that one school's data can never leak into another's query, which an application-level metadata filter doesn't provide (a filtering bug could theoretically cross tenants; a missing/wrong namespace argument can't return another tenant's vectors at all). That's a different axis from today's doc_type split and not a need that exists at single-deployment scale - worth adding if and when real multi-tenancy shows up, not before.
+
 ---
 
 ## Why Metadata Filtering Is Preferred Over Multiple Indexes
